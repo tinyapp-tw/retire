@@ -328,11 +328,15 @@
           <button class="btn ghost" id="btnImportFixed">匯入備份檔（訂閱管家或水電帳單）</button>
           <input type="file" id="fixedFile" accept="application/json,.json" style="display:none">
         </div>
-        <div id="fixedResult" class="note" style="margin-top:10px"></div>
-        <div class="form-actions" style="margin-top:8px; display:none" id="fixedApplyWrap">
-          <button class="btn ghost" id="btnApplyFixed">帶入退休後支出欄（<b id="fixedTotal"></b>/月）</button>
+        <div class="grid2" style="margin-top:10px">
+          <div class="field"><label for="fOtherFixed">其他固定開銷 /月（房貸租金、管理費、保險、稅金等）</label><input id="fOtherFixed" type="number" inputmode="numeric" min="0" step="500" value="0"></div>
+          <div class="field"><label for="fVariable">變動開銷 /月（飲食、交通、娛樂等）</label><input id="fVariable" type="number" inputmode="numeric" min="0" step="1000" value="0"></div>
         </div>
-        <p class="note">訂閱依備份檔內匯率換算為台幣月費合計；水電取近幾期帳單平均（雙月帳單自動除以 2）。主畫面 App 之間資料互相隔離，「讀取同裝置資料」僅在同一瀏覽器環境有效，一般請用備份檔匯入。<b>帶入後請再自行加上飲食、交通、娛樂等變動開銷。</b></p>
+        <div id="fixedResult" class="note" style="margin-top:4px"></div>
+        <div class="form-actions" style="margin-top:8px; display:none" id="fixedApplyWrap">
+          <button class="btn ghost" id="btnApplyFixed">四項合計帶入退休後支出欄（<b id="fixedTotal"></b>/月）</button>
+        </div>
+        <p class="note">訂閱依備份檔內匯率換算為台幣月費合計；水電取近幾期帳單平均（雙月帳單自動除以 2）。主畫面 App 之間資料互相隔離，「讀取同裝置資料」僅在同一瀏覽器環境有效，一般請用備份檔匯入。</p>
       </div>
     </section>
 
@@ -392,7 +396,7 @@
         </ol>
       </div>
 
-      <p class="note" style="text-align:center">退休試算 版本 v1.05<br>本 App 僅提供數學試算與記錄，不構成任何投資建議。</p>
+      <p class="note" style="text-align:center">退休試算 版本 v1.06<br>本 App 僅提供數學試算與記錄，不構成任何投資建議。</p>
     </section>
   </main>
 
@@ -825,6 +829,11 @@ function calcBillsMonthly(d) {
   return used ? { monthly: Math.round(total), count: used } : null;
 }
 
+function fixedTotalSum() {
+  const f = state.fixed || {};
+  return (f.subs || 0) + (f.bills || 0) + (f.other || 0) + (f.variable || 0);
+}
+
 function updateFixedDisplay() {
   const f = state.fixed || {};
   const el = document.getElementById('fixedResult');
@@ -832,16 +841,27 @@ function updateFixedDisplay() {
   const lines = [];
   if (f.subs != null) lines.push('📊 訂閱固定費：' + f.subs.toLocaleString('zh-TW') + ' /月（' + f.subsCount + ' 筆訂閱）');
   if (f.bills != null) lines.push('🧾 水電平均：' + f.bills.toLocaleString('zh-TW') + ' /月（近 ' + f.billsCount + ' 期帳單）');
+  if (f.other > 0) lines.push('🏠 其他固定開銷：' + f.other.toLocaleString('zh-TW') + ' /月');
+  if (f.variable > 0) lines.push('🍜 變動開銷：' + f.variable.toLocaleString('zh-TW') + ' /月');
   if (!lines.length) {
-    el.textContent = '尚未帶入資料。';
+    el.textContent = '尚未帶入或輸入資料。';
     wrap.style.display = 'none';
     return;
   }
-  const total = (f.subs || 0) + (f.bills || 0);
   el.innerHTML = lines.map(esc).join('<br>');
-  document.getElementById('fixedTotal').textContent = total.toLocaleString('zh-TW');
+  document.getElementById('fixedTotal').textContent = fixedTotalSum().toLocaleString('zh-TW');
   wrap.style.display = '';
 }
+
+['fOtherFixed', 'fVariable'].forEach(id => {
+  document.getElementById(id).addEventListener('input', () => {
+    state.fixed = state.fixed || {};
+    state.fixed.other = num('fOtherFixed');
+    state.fixed.variable = num('fVariable');
+    save();
+    updateFixedDisplay();
+  });
+});
 
 function absorbFixedData(d) {
   const subs = calcSubsMonthly(d);
@@ -887,13 +907,12 @@ document.getElementById('fixedFile').addEventListener('change', (e) => {
 });
 
 document.getElementById('btnApplyFixed').addEventListener('click', () => {
-  const f = state.fixed || {};
-  const total = (f.subs || 0) + (f.bills || 0);
+  const total = fixedTotalSum();
   if (!total) return;
   document.getElementById('pExpUnit').value = 'month';
   document.getElementById('pExpense').value = total;
   renderPlan();
-  toast('已帶入固定花費 ' + total.toLocaleString('zh-TW') + ' /月，請再加上變動開銷');
+  toast('已帶入每月支出合計 ' + total.toLocaleString('zh-TW') + ' 元');
 });
 
 /* ================= 資產快照 ================= */
@@ -1048,6 +1067,10 @@ function restoreInputs() {
   if (state.plan.expUnit) document.getElementById('pExpUnit').value = state.plan.expUnit;
   if (state.plan.mode) document.getElementById('pWMode').value = state.plan.mode;
   if (state.plan.cpiYears != null) document.getElementById('pCpiYears').value = state.plan.cpiYears;
+  if (state.fixed) {
+    if (state.fixed.other != null) document.getElementById('fOtherFixed').value = state.fixed.other;
+    if (state.fixed.variable != null) document.getElementById('fVariable').value = state.fixed.variable;
+  }
   applyModeVisibility();
   updateCpiPreview();
   ASSET_FIELDS.forEach(id => {
