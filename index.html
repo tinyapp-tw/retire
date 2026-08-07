@@ -1,0 +1,732 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="robots" content="noindex, nofollow">
+<title>退休試算</title>
+<link rel="manifest" href="manifest.webmanifest">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="退休試算">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<meta name="theme-color" content="#f9f9f7" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0d0d0d" media="(prefers-color-scheme: dark)">
+<style>
+  :root {
+    color-scheme: light;
+    --page: #f9f9f7;
+    --surface: #fcfcfb;
+    --ink-1: #0b0b0b;
+    --ink-2: #52514e;
+    --ink-muted: #6e6c66;
+    --hairline: #e1e0d9;
+    --border: rgba(11, 11, 11, 0.10);
+    --accent: #2a78d6;
+    --good: #0ca30c;
+    --danger: #d03b3b;
+    --line: #1baf7a;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      color-scheme: dark;
+      --page: #0d0d0d;
+      --surface: #1a1a19;
+      --ink-1: #ffffff;
+      --ink-2: #c3c2b7;
+      --ink-muted: #898781;
+      --hairline: #2c2c2a;
+      --border: rgba(255, 255, 255, 0.10);
+      --accent: #3987e5;
+      --good: #0ca30c;
+      --danger: #e66767;
+      --line: #199e70;
+    }
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html, body { height: 100%; }
+  body {
+    font-family: system-ui, -apple-system, "Segoe UI", "Microsoft JhengHei", sans-serif;
+    background: var(--page);
+    color: var(--ink-1);
+    font-size: 16px;
+    line-height: 1.5;
+  }
+  .app { max-width: 520px; margin: 0 auto; min-height: 100%; display: flex; flex-direction: column; }
+
+  header.topbar {
+    padding: calc(env(safe-area-inset-top) + 14px) 20px 10px;
+    display: flex; align-items: baseline; justify-content: space-between;
+  }
+  header.topbar h1 { font-size: 22px; font-weight: 700; }
+  header.topbar .sub { font-size: 13px; color: var(--ink-muted); }
+
+  main { flex: 1; padding: 4px 16px calc(env(safe-area-inset-bottom) + 84px); }
+  .view { display: none; }
+  .view.active { display: block; }
+
+  .card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    padding: 16px;
+    margin-bottom: 14px;
+  }
+  .card h2 { font-size: 13px; font-weight: 600; color: var(--ink-2); margin-bottom: 10px; }
+
+  .field { margin-bottom: 10px; }
+  .field label { display: block; font-size: 12px; color: var(--ink-2); margin-bottom: 4px; }
+  .field input, .field select {
+    width: 100%; font-family: inherit; font-size: 16px;
+    padding: 10px 12px;
+    border: 1px solid var(--hairline); border-radius: 10px;
+    background: var(--page); color: var(--ink-1);
+  }
+  .field input:focus { outline: 2px solid var(--accent); outline-offset: -1px; }
+  .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+
+  /* ---------- 結論 ---------- */
+  .verdict {
+    text-align: center;
+    padding: 16px;
+    border-radius: 14px;
+    margin-bottom: 14px;
+    border: 1px solid var(--border);
+    background: var(--surface);
+  }
+  .verdict .headline { font-size: 20px; font-weight: 700; }
+  .verdict .detail { font-size: 13px; color: var(--ink-2); margin-top: 6px; line-height: 1.8; }
+  .verdict.ok .headline { color: var(--good); }
+  .verdict.bad .headline { color: var(--danger); }
+
+  .kpi-row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 14px; }
+  .kpi {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    padding: 12px 14px;
+  }
+  .kpi .label { font-size: 12px; color: var(--ink-muted); }
+  .kpi .value { font-size: 19px; font-weight: 700; letter-spacing: -0.3px; font-variant-numeric: tabular-nums; word-break: break-all; }
+  .kpi .hint { font-size: 11px; color: var(--ink-muted); margin-top: 2px; }
+
+  /* ---------- 資產快照 ---------- */
+  .snap-row {
+    display: flex; align-items: center; gap: 10px;
+    padding: 9px 2px;
+    border-top: 1px solid var(--hairline);
+    font-size: 14px;
+  }
+  .snap-row:first-of-type { border-top: none; }
+  .snap-row .d { width: 90px; flex: none; color: var(--ink-2); font-variant-numeric: tabular-nums; }
+  .snap-row .t { flex: 1; text-align: right; font-weight: 600; font-variant-numeric: tabular-nums; }
+  .snap-row .delta { width: 86px; flex: none; text-align: right; font-size: 12px; font-variant-numeric: tabular-nums; }
+  .snap-row .delta.up { color: var(--good); }
+  .snap-row .delta.down { color: var(--danger); }
+  .snap-row .del {
+    flex: none; background: none; border: none; cursor: pointer;
+    color: var(--ink-muted); font-size: 15px; padding: 6px;
+  }
+
+  .total-line {
+    text-align: center; font-size: 15px; margin-top: 8px;
+    padding-top: 10px; border-top: 1px solid var(--hairline);
+  }
+  .total-line b { font-size: 20px; font-variant-numeric: tabular-nums; }
+
+  /* ---------- CPI 表 ---------- */
+  .cpi-grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 4px; font-size: 11px; }
+  .cpi-cell { background: var(--page); border-radius: 6px; padding: 4px 2px; text-align: center; color: var(--ink-2); }
+  .cpi-cell b { display: block; color: var(--ink-1); font-variant-numeric: tabular-nums; }
+
+  .btn {
+    display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+    border: none; border-radius: 12px;
+    font-size: 15px; font-weight: 600;
+    padding: 12px 16px; min-height: 44px;
+    cursor: pointer; font-family: inherit;
+    background: var(--accent); color: #fff;
+    width: 100%;
+    text-decoration: none;
+  }
+  .btn.ghost { background: transparent; color: var(--accent); border: 1px solid var(--border); }
+  .btn.danger { background: transparent; color: var(--danger); border: 1px solid var(--border); }
+  .btn.small { width: auto; padding: 9px 14px; font-size: 13px; min-height: 38px; }
+  .btn:active { opacity: 0.75; }
+  .form-actions { display: flex; flex-direction: column; gap: 8px; }
+  .note { font-size: 12px; color: var(--ink-muted); margin-top: 10px; line-height: 1.7; }
+  ol.steps { padding-left: 20px; font-size: 13px; color: var(--ink-2); line-height: 2.0; }
+
+  nav.tabbar {
+    position: fixed; left: 0; right: 0; bottom: 0;
+    background: var(--surface);
+    border-top: 1px solid var(--hairline);
+    display: flex; justify-content: space-around;
+    padding: 6px 0 calc(env(safe-area-inset-bottom) + 6px);
+    z-index: 30;
+  }
+  nav.tabbar button {
+    background: none; border: none;
+    font-family: inherit; font-size: 11px;
+    color: var(--ink-muted); cursor: pointer;
+    display: flex; flex-direction: column; align-items: center; gap: 2px;
+    width: 80px; padding: 4px 0;
+  }
+  nav.tabbar button .ico { font-size: 22px; line-height: 1; }
+  nav.tabbar button.active { color: var(--accent); font-weight: 600; }
+
+  .toast {
+    position: fixed; left: 50%; bottom: calc(env(safe-area-inset-bottom) + 100px);
+    transform: translateX(-50%);
+    background: var(--ink-1); color: var(--page);
+    font-size: 14px; padding: 10px 18px; border-radius: 20px;
+    z-index: 60; opacity: 0; transition: opacity 0.25s;
+    pointer-events: none; white-space: nowrap;
+  }
+  .toast.show { opacity: 1; }
+</style>
+</head>
+<body>
+<div class="app">
+  <header class="topbar">
+    <h1 id="topTitle">退休試算</h1>
+    <span class="sub" id="topSub"></span>
+  </header>
+
+  <main>
+    <!-- ============ 試算 ============ -->
+    <section class="view active" id="view-plan">
+      <div id="browserNote" style="display:none; font-size:12px; color:var(--ink-2); background:var(--surface); border:1px solid var(--border); border-radius:10px; padding:9px 12px; margin-bottom:12px; line-height:1.7;">
+        ⚠️ 您正在瀏覽器中檢視：這裡的資料與主畫面 App 不相通。日常使用請從主畫面圖示開啟。
+      </div>
+
+      <div class="verdict" id="verdict">
+        <div class="headline" id="vHead">—</div>
+        <div class="detail" id="vDetail">輸入下方參數後自動計算</div>
+      </div>
+
+      <div class="kpi-row">
+        <div class="kpi">
+          <div class="label">退休時資產（今日幣值）</div>
+          <div class="value" id="kAtRetire">—</div>
+          <div class="hint" id="kAtRetireNom"></div>
+        </div>
+        <div class="kpi">
+          <div class="label">退休時每月支出（屆時幣值）</div>
+          <div class="value" id="kExpense">—</div>
+          <div class="hint">今日支出隨通膨墊高</div>
+        </div>
+      </div>
+
+      <div class="card">
+        <h2>資產曲線（以今日幣值）</h2>
+        <div id="chart"></div>
+        <p class="note" id="chartNote" style="margin-top:6px"></p>
+      </div>
+
+      <div class="card">
+        <h2>基本參數</h2>
+        <div class="grid2">
+          <div class="field"><label for="pAge">目前年齡</label><input id="pAge" type="number" inputmode="numeric" min="18" max="80" value="35"></div>
+          <div class="field"><label for="pRetire">預計退休年齡</label><input id="pRetire" type="number" inputmode="numeric" min="30" max="90" value="60"></div>
+          <div class="field"><label for="pNow">目前總資產</label><input id="pNow" type="number" inputmode="numeric" min="0" step="10000" value="1000000"></div>
+          <div class="field"><label for="pMonthly">每月投入</label><input id="pMonthly" type="number" inputmode="numeric" min="0" step="1000" value="15000"></div>
+          <div class="field"><label for="pReturn">退休前年報酬率 %</label><input id="pReturn" type="number" inputmode="decimal" step="0.1" value="5"></div>
+          <div class="field"><label for="pReturnPost">退休後年報酬率 %</label><input id="pReturnPost" type="number" inputmode="decimal" step="0.1" value="3"></div>
+        </div>
+        <button class="btn ghost small" id="btnUseSnap" style="margin-top:4px">用最新資產快照帶入總資產</button>
+      </div>
+
+      <div class="card">
+        <h2>退休後的生活</h2>
+        <div class="grid2">
+          <div class="field"><label for="pExpense">每月支出（今日幣值）</label><input id="pExpense" type="number" inputmode="numeric" min="0" step="1000" value="50000"></div>
+          <div class="field"><label for="pPension">每月其他收入（年金等，今日幣值）</label><input id="pPension" type="number" inputmode="numeric" min="0" step="1000" value="0"></div>
+          <div class="field"><label for="pInflation">通膨率 %</label><input id="pInflation" type="number" inputmode="decimal" step="0.05" value="1.49"></div>
+          <div class="field"><label for="pPlanTo">規劃至歲數</label><input id="pPlanTo" type="number" inputmode="numeric" min="60" max="110" value="90"></div>
+        </div>
+        <div class="form-actions" style="flex-direction:row; gap:8px">
+          <button class="btn ghost small" data-inf="10">用近10年官方平均 1.49%</button>
+          <button class="btn ghost small" data-inf="20">用近20年平均 1.30%</button>
+        </div>
+        <p class="note">通膨預設值來自主計總處歷年 CPI 年增率（見「設定」分頁）。</p>
+      </div>
+    </section>
+
+    <!-- ============ 資產 ============ -->
+    <section class="view" id="view-assets">
+      <div class="card">
+        <h2>目前資產盤點</h2>
+        <div class="grid2">
+          <div class="field"><label for="aCash">現金與存款</label><input id="aCash" type="number" inputmode="numeric" min="0" step="10000" value="0"></div>
+          <div class="field"><label for="aStock">股票 / ETF</label><input id="aStock" type="number" inputmode="numeric" min="0" step="10000" value="0"></div>
+          <div class="field"><label for="aBond">債券 / 基金</label><input id="aBond" type="number" inputmode="numeric" min="0" step="10000" value="0"></div>
+          <div class="field"><label for="aHouse">房產淨值（市值－房貸）</label><input id="aHouse" type="number" inputmode="numeric" step="10000" value="0"></div>
+          <div class="field"><label for="aIns">保險現值</label><input id="aIns" type="number" inputmode="numeric" min="0" step="10000" value="0"></div>
+          <div class="field"><label for="aOther">其他</label><input id="aOther" type="number" inputmode="numeric" step="10000" value="0"></div>
+        </div>
+        <div class="total-line">總計 <b id="aTotal">0</b></div>
+        <div class="form-actions" style="margin-top:10px">
+          <button class="btn" id="btnSnap">📸 記錄今天的資產快照</button>
+        </div>
+        <p class="note">建議每季記錄一次。同一天重複記錄會覆蓋當天的快照。</p>
+      </div>
+
+      <div class="card">
+        <h2>淨資產軌跡</h2>
+        <div id="snapChart"></div>
+        <div id="snapList"></div>
+      </div>
+    </section>
+
+    <!-- ============ 設定 ============ -->
+    <section class="view" id="view-settings">
+      <div class="card">
+        <h2>官方通膨資料（主計總處 CPI 年增率）</h2>
+        <div class="cpi-grid" id="cpiGrid"></div>
+        <p class="note">資料來源：行政院主計總處歷年消費者物價指數年增率（2001–2025）。近 10 年平均 <b id="cpiAvg10">—</b>、近 20 年平均 <b id="cpiAvg20">—</b>。主計總處每年公布上一年度數據後，App 會隨版本更新內建值。</p>
+      </div>
+
+      <div class="card">
+        <h2>資料備份</h2>
+        <div class="form-actions">
+          <button class="btn ghost" id="btnExport">匯出備份檔（JSON）</button>
+          <button class="btn ghost" id="btnImport">匯入備份檔</button>
+          <input type="file" id="importFile" accept="application/json,.json" style="display:none">
+          <button class="btn danger" id="btnWipe">清除全部資料</button>
+        </div>
+        <p class="note">試算參數與資產快照只存在這台裝置的瀏覽器裡，建議定期匯出備份。</p>
+      </div>
+
+      <div class="card">
+        <h2>安裝到 iPhone 主畫面</h2>
+        <ol class="steps">
+          <li>用 Safari 開啟本頁網址</li>
+          <li>點下方「分享」按鈕（方框加向上箭頭）</li>
+          <li>選「加入主畫面」</li>
+          <li>之後從主畫面圖示開啟，即為全螢幕 App</li>
+        </ol>
+      </div>
+
+      <p class="note" style="text-align:center">退休試算 版本 v1.00<br>本 App 僅提供數學試算與記錄，不構成任何投資建議。</p>
+    </section>
+  </main>
+
+  <nav class="tabbar">
+    <button data-tab="plan" class="active"><span class="ico">🧮</span>試算</button>
+    <button data-tab="assets"><span class="ico">💰</span>資產</button>
+    <button data-tab="settings"><span class="ico">⚙️</span>設定</button>
+  </nav>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+'use strict';
+
+const STORE_KEY = 'retire.data.v1';
+
+/* ================= 官方 CPI 年增率（%），主計總處 2001–2025 ================= */
+const CPI = {
+  2001: -0.01, 2002: -0.20, 2003: -0.28, 2004: 1.61, 2005: 2.31,
+  2006: 0.60,  2007: 1.80,  2008: 3.52,  2009: -0.87, 2010: 0.97,
+  2011: 1.42,  2012: 1.93,  2013: 0.79,  2014: 1.20,  2015: -0.30,
+  2016: 1.39,  2017: 0.62,  2018: 1.35,  2019: 0.56,  2020: -0.23,
+  2021: 1.97,  2022: 2.95,  2023: 2.49,  2024: 2.18,  2025: 1.66
+};
+function cpiAvg(years) {
+  const ys = Object.keys(CPI).map(Number).sort((a, b) => b - a).slice(0, years);
+  return ys.reduce((s, y) => s + CPI[y], 0) / ys.length;
+}
+
+/* ================= 狀態 ================= */
+const PLAN_FIELDS = ['pAge', 'pRetire', 'pNow', 'pMonthly', 'pReturn', 'pReturnPost', 'pExpense', 'pPension', 'pInflation', 'pPlanTo'];
+const ASSET_FIELDS = ['aCash', 'aStock', 'aBond', 'aHouse', 'aIns', 'aOther'];
+
+let state = load();
+
+function load() {
+  try {
+    const raw = localStorage.getItem(STORE_KEY);
+    if (raw) {
+      const d = JSON.parse(raw);
+      if (typeof d === 'object' && d !== null) {
+        return {
+          plan: d.plan || {},
+          assets: d.assets || {},
+          snaps: Array.isArray(d.snaps) ? d.snaps : []
+        };
+      }
+    }
+  } catch (e) { /* 損毀就重建 */ }
+  return { plan: {}, assets: {}, snaps: [] };
+}
+
+function save() {
+  try {
+    localStorage.setItem(STORE_KEY, JSON.stringify(state));
+    return true;
+  } catch (e) {
+    alert('儲存失敗：空間不足或儲存被停用。');
+    return false;
+  }
+}
+
+let toastTimer = null;
+function toast(msg) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => t.classList.remove('show'), 2200);
+}
+
+function esc(s) {
+  return String(s == null ? '' : s)
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+}
+
+function num(id) { return Number(document.getElementById(id).value) || 0; }
+function fmt(n) {
+  const abs = Math.abs(n);
+  if (abs >= 100000000) return (n / 100000000).toFixed(2) + ' 億';
+  if (abs >= 10000) return Math.round(n / 10000).toLocaleString('zh-TW') + ' 萬';
+  return Math.round(n).toLocaleString('zh-TW');
+}
+
+/* ================= 核心試算（逐月模擬） ================= */
+function simulate(p) {
+  const months = Math.max(0, Math.round((p.planTo - p.age) * 12));
+  const retireM = Math.max(0, Math.round((p.retire - p.age) * 12));
+  const rPre = Math.pow(1 + p.rPre / 100, 1 / 12) - 1;
+  const rPost = Math.pow(1 + p.rPost / 100, 1 / 12) - 1;
+  const infl = p.infl / 100;
+  let A = p.now;
+  let atRetireNom = null;
+  let depleteAge = null;
+  let depleted = false;
+  const yearly = [{ age: p.age, real: A, nom: A }];
+
+  for (let m = 1; m <= months; m++) {
+    const yearsFromNow = m / 12;
+    if (m <= retireM) {
+      A = A * (1 + rPre) + p.monthly;
+    } else if (!depleted) {
+      /* 支出與年金皆以今日幣值輸入，隨通膨逐月墊高 */
+      const inflFactor = Math.pow(1 + infl, yearsFromNow);
+      const netExpense = Math.max(0, (p.expense - p.pension) * inflFactor);
+      A = A * (1 + rPost) - netExpense;
+      if (A <= 0) {
+        depleted = true;
+        depleteAge = p.age + yearsFromNow;
+        A = 0;  /* 耗盡後歸零，曲線停在 0 */
+      }
+    }
+    if (m === retireM) atRetireNom = A;
+    if (m % 12 === 0 || m === months) {
+      yearly.push({
+        age: p.age + yearsFromNow,
+        nom: A,
+        real: A / Math.pow(1 + infl, yearsFromNow)
+      });
+    }
+  }
+  if (atRetireNom === null) atRetireNom = A;
+  const yearsToRetire = Math.max(0, p.retire - p.age);
+  return {
+    yearly,
+    atRetireNom,
+    atRetireReal: atRetireNom / Math.pow(1 + infl, yearsToRetire),
+    expenseAtRetire: p.expense * Math.pow(1 + infl, yearsToRetire),
+    endBalance: A,
+    endBalanceReal: A / Math.pow(1 + infl, months / 12),
+    depleteAge
+  };
+}
+
+/* 求解：要撐到規劃歲數，每月需投入多少（二分搜尋） */
+function solveMonthly(p) {
+  let lo = 0, hi = 1000000;
+  for (let i = 0; i < 40; i++) {
+    const mid = (lo + hi) / 2;
+    const r = simulate(Object.assign({}, p, { monthly: mid }));
+    if (r.depleteAge === null && r.endBalance >= 0) hi = mid; else lo = mid;
+  }
+  return hi;
+}
+
+function readPlan() {
+  return {
+    age: num('pAge'), retire: num('pRetire'), now: num('pNow'), monthly: num('pMonthly'),
+    rPre: num('pReturn'), rPost: num('pReturnPost'),
+    expense: num('pExpense'), pension: num('pPension'),
+    infl: num('pInflation'), planTo: num('pPlanTo')
+  };
+}
+
+function renderPlan() {
+  const p = readPlan();
+  if (p.retire <= p.age || p.planTo <= p.retire) {
+    document.getElementById('vHead').textContent = '請檢查年齡設定';
+    document.getElementById('vDetail').textContent = '需要：目前年齡 < 退休年齡 < 規劃至歲數';
+    document.getElementById('verdict').className = 'verdict';
+    return;
+  }
+  const r = simulate(p);
+
+  document.getElementById('kAtRetire').textContent = fmt(r.atRetireReal);
+  document.getElementById('kAtRetireNom').textContent = '名目金額約 ' + fmt(r.atRetireNom);
+  document.getElementById('kExpense').textContent = fmt(r.expenseAtRetire) + ' /月';
+
+  const v = document.getElementById('verdict');
+  if (r.depleteAge === null) {
+    v.className = 'verdict ok';
+    document.getElementById('vHead').textContent = '✅ 可以撐到 ' + p.planTo + ' 歲';
+    document.getElementById('vDetail').textContent =
+      '到 ' + p.planTo + ' 歲時約還剩 ' + fmt(r.endBalanceReal) + '（今日幣值）。';
+  } else {
+    v.className = 'verdict bad';
+    const need = solveMonthly(p);
+    document.getElementById('vHead').textContent = '⚠️ 約 ' + r.depleteAge.toFixed(0) + ' 歲時資產耗盡';
+    document.getElementById('vDetail').textContent =
+      '距離規劃的 ' + p.planTo + ' 歲還差 ' + Math.max(0, p.planTo - r.depleteAge).toFixed(0) + ' 年。' +
+      '若要撐到 ' + p.planTo + ' 歲，每月投入需約 ' + fmt(need) + '（目前 ' + fmt(p.monthly) + '），或調整退休年齡/支出。';
+  }
+
+  renderChart(p, r);
+  state.plan = p;
+  save();
+}
+
+/* ================= 曲線圖（SVG，今日幣值） ================= */
+function renderChart(p, r) {
+  const rows = r.yearly;
+  const W = 340, H = 170, padL = 8, padR = 8, padT = 18, padB = 24;
+  const vals = rows.map(d => d.real);
+  const maxV = Math.max(...vals, 1);
+  const minV = Math.min(...vals, 0);
+  const x = i => padL + i * (W - padL - padR) / (rows.length - 1);
+  const y = v => padT + (maxV - v) / (maxV - minV || 1) * (H - padT - padB);
+
+  let pts = '';
+  rows.forEach((d, i) => { pts += (i ? ' ' : '') + x(i).toFixed(1) + ',' + y(d.real).toFixed(1); });
+
+  const zeroY = y(0);
+  const retireX = x(rows.findIndex(d => d.age >= p.retire));
+  const peakIdx = vals.indexOf(maxV);
+
+  const svg =
+    '<svg viewBox="0 0 ' + W + ' ' + H + '" style="width:100%; height:auto; display:block" role="img" aria-label="資產曲線">' +
+    '<line x1="0" y1="' + zeroY.toFixed(1) + '" x2="' + W + '" y2="' + zeroY.toFixed(1) + '" stroke="var(--hairline)" stroke-width="1"/>' +
+    '<line x1="' + retireX.toFixed(1) + '" y1="' + padT + '" x2="' + retireX.toFixed(1) + '" y2="' + (H - padB) + '" stroke="var(--ink-muted)" stroke-width="1" stroke-dasharray="4 4"/>' +
+    '<text x="' + (retireX + 4).toFixed(1) + '" y="' + (padT + 10) + '" font-size="11" fill="var(--ink-muted)">退休 ' + p.retire + ' 歲</text>' +
+    '<polyline points="' + pts + '" fill="none" stroke="var(--line)" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>' +
+    '<circle cx="' + x(peakIdx).toFixed(1) + '" cy="' + y(maxV).toFixed(1) + '" r="4" fill="var(--line)"/>' +
+    '<text x="' + Math.min(x(peakIdx), W - 60).toFixed(1) + '" y="' + Math.max(12, y(maxV) - 8).toFixed(1) + '" font-size="11" font-weight="600" fill="var(--ink-1)">' + fmt(maxV) + '</text>' +
+    '<text x="' + padL + '" y="' + (H - 8) + '" font-size="11" fill="var(--ink-muted)">' + p.age + ' 歲</text>' +
+    '<text x="' + (W - padR) + '" y="' + (H - 8) + '" text-anchor="end" font-size="11" fill="var(--ink-muted)">' + p.planTo + ' 歲</text>' +
+    '</svg>';
+  document.getElementById('chart').innerHTML = svg;
+  document.getElementById('chartNote').textContent =
+    r.depleteAge === null
+      ? '高峰約在 ' + rows[peakIdx].age.toFixed(0) + ' 歲（' + fmt(maxV) + '，今日幣值）。'
+      : '曲線跌破 0 的位置即資產耗盡點（約 ' + r.depleteAge.toFixed(0) + ' 歲）。';
+}
+
+PLAN_FIELDS.forEach(id => document.getElementById(id).addEventListener('input', renderPlan));
+document.querySelectorAll('[data-inf]').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.getElementById('pInflation').value = cpiAvg(Number(btn.dataset.inf)).toFixed(2);
+    renderPlan();
+  });
+});
+document.getElementById('btnUseSnap').addEventListener('click', () => {
+  if (!state.snaps.length) { toast('還沒有資產快照，先到「資產」分頁記錄'); return; }
+  const latest = state.snaps[state.snaps.length - 1];
+  document.getElementById('pNow').value = latest.total;
+  renderPlan();
+  toast('已帶入 ' + latest.date + ' 的快照總額');
+});
+
+/* ================= 資產快照 ================= */
+function assetTotal() {
+  return ASSET_FIELDS.reduce((s, id) => s + num(id), 0);
+}
+function renderAssetTotal() {
+  document.getElementById('aTotal').textContent = fmt(assetTotal());
+  state.assets = {};
+  ASSET_FIELDS.forEach(id => { state.assets[id] = num(id); });
+  save();
+}
+ASSET_FIELDS.forEach(id => document.getElementById(id).addEventListener('input', renderAssetTotal));
+
+function todayStr() {
+  const d = new Date();
+  return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+}
+
+document.getElementById('btnSnap').addEventListener('click', () => {
+  const total = assetTotal();
+  if (total === 0 && !confirm('總資產為 0，仍要記錄快照？')) return;
+  const date = todayStr();
+  const breakdown = {};
+  ASSET_FIELDS.forEach(id => { breakdown[id] = num(id); });
+  state.snaps = state.snaps.filter(s => s.date !== date);
+  state.snaps.push({ date, total, breakdown });
+  state.snaps.sort((a, b) => a.date.localeCompare(b.date));
+  save();
+  renderSnaps();
+  toast('已記錄 ' + date + ' 的快照');
+});
+
+function renderSnaps() {
+  const list = document.getElementById('snapList');
+  const chart = document.getElementById('snapChart');
+  document.getElementById('topSub').textContent = state.snaps.length ? state.snaps.length + ' 筆快照' : '';
+  if (!state.snaps.length) {
+    chart.innerHTML = '';
+    list.innerHTML = '<p class="note" style="margin:0">記錄第一筆快照後，這裡會顯示淨資產的成長軌跡。</p>';
+    return;
+  }
+  const rows = state.snaps.slice(-24);
+  if (rows.length >= 2) {
+    const W = 340, H = 120, padL = 8, padR = 8, padT = 16, padB = 8;
+    const vals = rows.map(s => s.total);
+    const maxV = Math.max(...vals), minV = Math.min(...vals, 0);
+    const x = i => padL + i * (W - padL - padR) / (rows.length - 1);
+    const y = v => padT + (maxV - v) / (maxV - minV || 1) * (H - padT - padB);
+    let pts = '', dots = '';
+    rows.forEach((s, i) => {
+      pts += (i ? ' ' : '') + x(i).toFixed(1) + ',' + y(s.total).toFixed(1);
+      dots += '<circle cx="' + x(i).toFixed(1) + '" cy="' + y(s.total).toFixed(1) + '" r="3.5" fill="var(--line)"/>';
+    });
+    chart.innerHTML = '<svg viewBox="0 0 ' + W + ' ' + H + '" style="width:100%; height:auto; display:block" role="img" aria-label="淨資產軌跡">' +
+      '<polyline points="' + pts + '" fill="none" stroke="var(--line)" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>' + dots + '</svg>';
+  } else {
+    chart.innerHTML = '';
+  }
+  list.innerHTML = state.snaps.slice().reverse().map((s, ri) => {
+    const idx = state.snaps.length - 1 - ri;
+    const prev = idx > 0 ? state.snaps[idx - 1] : null;
+    let delta = '';
+    if (prev) {
+      const d = s.total - prev.total;
+      delta = '<span class="delta ' + (d >= 0 ? 'up' : 'down') + '">' + (d >= 0 ? '+' : '') + fmt(d) + '</span>';
+    } else {
+      delta = '<span class="delta"></span>';
+    }
+    return '<div class="snap-row"><span class="d">' + esc(s.date) + '</span>' +
+      '<span class="t">' + fmt(s.total) + '</span>' + delta +
+      '<button class="del" data-date="' + esc(s.date) + '" aria-label="刪除">✕</button></div>';
+  }).join('');
+  list.querySelectorAll('.del').forEach(btn => {
+    btn.addEventListener('click', () => {
+      if (!confirm('刪除 ' + btn.dataset.date + ' 的快照？')) return;
+      state.snaps = state.snaps.filter(s => s.date !== btn.dataset.date);
+      save();
+      renderSnaps();
+    });
+  });
+}
+
+/* ================= CPI 表 ================= */
+function renderCpi() {
+  const grid = document.getElementById('cpiGrid');
+  grid.innerHTML = Object.keys(CPI).map(Number).sort((a, b) => a - b).map(y =>
+    '<div class="cpi-cell">' + y + '<b>' + CPI[y].toFixed(2) + '%</b></div>'
+  ).join('');
+  document.getElementById('cpiAvg10').textContent = cpiAvg(10).toFixed(2) + '%';
+  document.getElementById('cpiAvg20').textContent = cpiAvg(20).toFixed(2) + '%';
+}
+
+/* ================= 備份 ================= */
+document.getElementById('btnExport').addEventListener('click', () => {
+  const blob = new Blob([JSON.stringify(state, null, 2)], { type: 'application/json' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = '退休試算備份-' + todayStr() + '.json';
+  a.click();
+  URL.revokeObjectURL(a.href);
+  toast('已產生備份檔');
+});
+document.getElementById('btnImport').addEventListener('click', () => document.getElementById('importFile').click());
+document.getElementById('importFile').addEventListener('change', (e) => {
+  const f = e.target.files[0];
+  if (!f) return;
+  const reader = new FileReader();
+  reader.onload = () => {
+    try {
+      const d = JSON.parse(reader.result);
+      if (typeof d !== 'object' || d === null || !Array.isArray(d.snaps)) throw new Error('bad');
+      if (!confirm('匯入將覆蓋目前的資料，確定？')) return;
+      state = { plan: d.plan || {}, assets: d.assets || {}, snaps: d.snaps };
+      save();
+      restoreInputs();
+      renderAll();
+      toast('已匯入');
+    } catch (err) {
+      alert('檔案格式不正確，無法匯入。');
+    }
+    e.target.value = '';
+  };
+  reader.readAsText(f);
+});
+document.getElementById('btnWipe').addEventListener('click', () => {
+  if (confirm('確定要清除全部資料（參數與快照）？') && confirm('再次確認：真的要刪除？')) {
+    state = { plan: {}, assets: {}, snaps: [] };
+    save();
+    location.reload();
+  }
+});
+
+/* ================= 分頁與啟動 ================= */
+document.querySelectorAll('nav.tabbar button').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('nav.tabbar button').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
+    document.getElementById('view-' + btn.dataset.tab).classList.add('active');
+    document.getElementById('topTitle').textContent =
+      btn.dataset.tab === 'plan' ? '退休試算' : (btn.dataset.tab === 'assets' ? '資產快照' : '設定');
+  });
+});
+
+function restoreInputs() {
+  const map = { age: 'pAge', retire: 'pRetire', now: 'pNow', monthly: 'pMonthly', rPre: 'pReturn', rPost: 'pReturnPost', expense: 'pExpense', pension: 'pPension', infl: 'pInflation', planTo: 'pPlanTo' };
+  Object.keys(map).forEach(k => {
+    if (state.plan[k] != null) document.getElementById(map[k]).value = state.plan[k];
+  });
+  ASSET_FIELDS.forEach(id => {
+    if (state.assets[id] != null) document.getElementById(id).value = state.assets[id];
+  });
+}
+
+function renderAll() {
+  renderPlan();
+  renderAssetTotal();
+  renderSnaps();
+  renderCpi();
+}
+
+restoreInputs();
+renderAll();
+
+if (!(navigator.standalone === true || (window.matchMedia && matchMedia('(display-mode: standalone)').matches))) {
+  document.getElementById('browserNote').style.display = '';
+}
+
+if ('serviceWorker' in navigator &&
+    (location.protocol === 'https:' || location.hostname === 'localhost' || location.hostname === '127.0.0.1')) {
+  navigator.serviceWorker.register('./sw.js').catch(() => {});
+}
+
+/* 向 iOS 申請持久儲存保護 */
+if (navigator.storage && navigator.storage.persist) {
+  navigator.storage.persist().catch(() => {});
+}
+</script>
+</body>
+</html>
