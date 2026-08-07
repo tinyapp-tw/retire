@@ -235,7 +235,7 @@
         <div class="kpi">
           <div class="label">固定花費合計（今日幣值）</div>
           <div class="value" id="kFixed">—</div>
-          <div class="hint">訂閱＋水電＋其他固定（不含變動）</div>
+          <div class="hint" id="kFixedHint">訂閱＋水電＋其他固定（不含變動）</div>
         </div>
         <div class="kpi">
           <div class="label">扣除固定花費後每月剩餘</div>
@@ -408,7 +408,7 @@
         </ol>
       </div>
 
-      <p class="note" style="text-align:center">退休試算 版本 v1.07<br>本 App 僅提供數學試算與記錄，不構成任何投資建議。</p>
+      <p class="note" style="text-align:center">退休試算 版本 v1.08<br>本 App 僅提供數學試算與記錄，不構成任何投資建議。</p>
     </section>
   </main>
 
@@ -723,11 +723,13 @@ function renderPlan() {
     const remain = wReal2 + p.pension - fixedOnly;
     const fmtMo2 = n => Math.round(n).toLocaleString('zh-TW');
     document.getElementById('kFixed').textContent = fmtMo2(fixedOnly) + ' /月';
+    document.getElementById('kFixedHint').textContent =
+      '訂閱＋水電＋其他固定；退休時屆時幣值約 ' + fmtMo2(fixedOnly * inflToRetire2) + ' /月';
     const kRemain = document.getElementById('kRemain');
     kRemain.textContent = fmtMo2(remain) + ' /月';
     kRemain.style.color = remain >= 0 ? '' : 'var(--danger)';
     document.getElementById('kRemainHint').textContent = remain >= 0
-      ? '可自由用於飲食、交通、娛樂等變動開銷'
+      ? '退休時屆時幣值約 ' + fmtMo2(remain * inflToRetire2) + ' /月；可自由用於變動開銷'
       : '⚠️ 不足以支付固定花費，需提高提領率或降低固定支出';
   } else {
     rateRow.style.display = 'none';
