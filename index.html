@@ -319,7 +319,9 @@
           <div class="field"><label for="lpBalance">勞退：目前專戶餘額</label><input id="lpBalance" type="number" inputmode="numeric" min="0" step="10000" value="0"></div>
           <div class="field"><label for="lpWage">勞退：月提繳工資</label><input id="lpWage" type="number" inputmode="numeric" min="0" step="1000" value="50000"></div>
           <div class="field"><label for="lpWageGrow">勞退：提繳工資年成長 %（粗估調薪）</label><input id="lpWageGrow" type="number" inputmode="decimal" min="0" max="10" step="0.5" value="2"></div>
-          <div class="field"><label for="lpSelf">勞退：自提 %（0–6）</label><input id="lpSelf" type="number" inputmode="decimal" min="0" max="6" step="1" value="0"></div>
+          <div class="field"><label for="lpStartYear">勞退：雇主提繳開始於第幾年後（0＝已在提繳）</label><input id="lpStartYear" type="number" inputmode="numeric" min="0" max="40" step="1" value="0"></div>
+          <div class="field"><label for="lpSelf">勞退：自提 %（0–6，單一比率）</label><input id="lpSelf" type="number" inputmode="decimal" min="0" max="6" step="1" value="0"></div>
+          <div class="field"><label for="lpSelfStart">勞退：自提開始於第幾年後（0＝現在就自提）</label><input id="lpSelfStart" type="number" inputmode="numeric" min="0" max="40" step="1" value="0"></div>
           <div class="field"><label for="lpReturn">勞退：專戶年報酬假設 %</label><input id="lpReturn" type="number" inputmode="decimal" step="0.1" value="3"></div>
           <div class="field">
             <label for="lpMode">勞退：提領方式</label>
@@ -423,7 +425,7 @@
         </ol>
       </div>
 
-      <p class="note" style="text-align:center">退休試算 版本 v1.12<br>本 App 僅提供數學試算與記錄，不構成任何投資建議。</p>
+      <p class="note" style="text-align:center">退休試算 版本 v1.13<br>本 App 僅提供數學試算與記錄，不構成任何投資建議。</p>
     </section>
   </main>
 
@@ -463,7 +465,7 @@ function cpiAvg(years) {
 
 /* ================= 狀態 ================= */
 const PLAN_FIELDS = ['pAge', 'pRetire', 'pNow', 'pMonthly', 'pReturn', 'pReturnPost', 'pCash', 'pCashRate', 'pLump', 'pExpense', 'pWRate', 'pPensionIdx', 'pPensionFix', 'pInflation', 'pPlanTo',
-  'liSalary', 'liYears', 'lpBalance', 'lpWage', 'lpWageGrow', 'lpSelf', 'lpReturn', 'lpYears'];
+  'liSalary', 'liYears', 'lpBalance', 'lpWage', 'lpWageGrow', 'lpStartYear', 'lpSelf', 'lpSelfStart', 'lpReturn', 'lpYears'];
 const ASSET_FIELDS = ['aCash', 'aStock', 'aBond', 'aHouse', 'aIns', 'aOther'];
 
 let state = load();
@@ -630,7 +632,8 @@ function readPlan() {
     infl: num('pInflation'), planTo: num('pPlanTo'),
     cpiYears: num('pCpiYears') || 10,
     liSalary: num('liSalary'), liYears: num('liYears'),
-    lpBalance: num('lpBalance'), lpWage: num('lpWage'), lpWageGrow: num('lpWageGrow'), lpSelf: num('lpSelf'),
+    lpBalance: num('lpBalance'), lpWage: num('lpWage'), lpWageGrow: num('lpWageGrow'),
+    lpStartYear: num('lpStartYear'), lpSelf: num('lpSelf'), lpSelfStart: num('lpSelfStart'),
     lpReturn: num('lpReturn'), lpYears: num('lpYears')
   };
 }
@@ -648,12 +651,16 @@ function estimatePension(p) {
   const n = Math.max(0, Math.round((p.retire - p.age) * 12));
   const i = Math.pow(1 + p.lpReturn / 100, 1 / 12) - 1;
   const g = (p.lpWageGrow || 0) / 100;
-  const cRate = 0.06 + Math.min(6, Math.max(0, p.lpSelf)) / 100;
+  const selfRate = Math.min(6, Math.max(0, p.lpSelf)) / 100;
+  const startY = Math.max(0, Math.round(p.lpStartYear || 0));     /* 雇主提繳起點（年） */
+  const selfStartY = Math.max(0, Math.round(p.lpSelfStart || 0)); /* 自提起點（年） */
   let fv = p.lpBalance;
   for (let m = 1; m <= n; m++) {
     fv = fv * (1 + i);
-    const wage = Math.min(150000, p.lpWage * Math.pow(1 + g, Math.floor((m - 1) / 12)));
-    fv += wage * cRate;
+    const yearIdx = Math.floor((m - 1) / 12);
+    const wage = Math.min(150000, p.lpWage * Math.pow(1 + g, yearIdx));
+    const rate = (yearIdx >= startY ? 0.06 : 0) + (yearIdx >= selfStartY ? selfRate : 0);
+    fv += wage * rate;
   }
   const N = Math.max(1, Math.round(p.lpYears * 12));
   const lp = Math.max(0, Math.round(i > 0 ? fv * i / (1 - Math.pow(1 + i, -N)) : fv / N));
@@ -1151,7 +1158,7 @@ function restoreInputs() {
   /* 舊版單一 pension 欄位的資料，遷移到通膨連動欄 */
   if (state.plan.pension != null && state.plan.pensionIdx == null) state.plan.pensionIdx = state.plan.pension;
   const map = { age: 'pAge', retire: 'pRetire', now: 'pNow', monthly: 'pMonthly', rPre: 'pReturn', rPost: 'pReturnPost', cash: 'pCash', cashRate: 'pCashRate', expenseInput: 'pExpense', wRate: 'pWRate', pensionIdx: 'pPensionIdx', pensionFix: 'pPensionFix', lump: 'pLump', infl: 'pInflation', planTo: 'pPlanTo',
-    liSalary: 'liSalary', liYears: 'liYears', lpBalance: 'lpBalance', lpWage: 'lpWage', lpWageGrow: 'lpWageGrow', lpSelf: 'lpSelf', lpReturn: 'lpReturn', lpYears: 'lpYears' };
+    liSalary: 'liSalary', liYears: 'liYears', lpBalance: 'lpBalance', lpWage: 'lpWage', lpWageGrow: 'lpWageGrow', lpStartYear: 'lpStartYear', lpSelf: 'lpSelf', lpSelfStart: 'lpSelfStart', lpReturn: 'lpReturn', lpYears: 'lpYears' };
   Object.keys(map).forEach(k => {
     if (state.plan[k] != null) document.getElementById(map[k]).value = state.plan[k];
   });
