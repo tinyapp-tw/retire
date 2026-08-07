@@ -112,6 +112,26 @@
   .kpi .value { font-size: 19px; font-weight: 700; letter-spacing: -0.3px; font-variant-numeric: tabular-nums; word-break: break-all; }
   .kpi .hint { font-size: 11px; color: var(--ink-muted); margin-top: 2px; }
 
+  /* ---------- 帳單式現金流 ---------- */
+  .stmt {
+    display: flex; justify-content: space-between; align-items: baseline;
+    padding: 7px 0;
+    font-size: 14px; color: var(--ink-2);
+    border-top: 1px solid var(--hairline);
+  }
+  .stmt:first-of-type { border-top: none; }
+  .stmt b { font-size: 17px; color: var(--ink-1); font-variant-numeric: tabular-nums; }
+  .stmt.total { border-top: 2px solid var(--hairline); }
+  .stmt.total b { font-size: 21px; }
+  .more-row {
+    display: flex; justify-content: space-between; gap: 10px;
+    padding: 6px 0;
+    font-size: 13px; color: var(--ink-2);
+    border-top: 1px solid var(--hairline);
+  }
+  .more-row:first-of-type { border-top: none; }
+  .more-row b { color: var(--ink-1); font-variant-numeric: tabular-nums; white-space: nowrap; }
+
   /* ---------- 資產快照 ---------- */
   .snap-row {
     display: flex; align-items: center; gap: 10px;
@@ -207,42 +227,27 @@
         <div class="detail" id="vDetail">輸入下方參數後自動計算</div>
       </div>
 
-      <div class="kpi-row">
-        <div class="kpi">
-          <div class="label">退休時資產（今日幣值）</div>
-          <div class="value" id="kAtRetire">—</div>
-          <div class="hint" id="kAtRetireNom"></div>
-        </div>
-        <div class="kpi">
-          <div class="label">退休首年每月提領（屆時幣值）</div>
-          <div class="value" id="kExpense">—</div>
-          <div class="hint">今日金額隨通膨墊高</div>
-        </div>
+      <div class="card" id="cashflowCard" style="display:none">
+        <h2>退休後每月現金流（今日幣值）</h2>
+        <div class="stmt"><span>可提領</span><b id="cfW">—</b></div>
+        <div class="stmt"><span>＋ 年金等其他收入</span><b id="cfP">—</b></div>
+        <div class="stmt"><span>− 固定花費（訂閱＋水電＋其他）</span><b id="cfF">—</b></div>
+        <div class="stmt total"><span>＝ 可自由花費</span><b id="cfR">—</b></div>
+        <p class="note" id="cfNote" style="margin-top:8px"></p>
       </div>
-      <div class="kpi-row" id="neededRow">
-        <div class="kpi">
-          <div class="label" id="kN1Label">需要準備的退休金（今日幣值）</div>
-          <div class="value" id="kNeeded">—</div>
-          <div class="hint" id="kNeededNom"></div>
-        </div>
-        <div class="kpi">
-          <div class="label" id="kN2Label">目標達成率</div>
-          <div class="value" id="kGoal">—</div>
-          <div class="hint" id="kGoalGap"></div>
-        </div>
+
+      <div class="card" id="goalCard" style="display:none">
+        <h2>目標檢查（今日幣值）</h2>
+        <div class="stmt"><span>需要準備的退休金</span><b id="gNeed">—</b></div>
+        <div class="stmt"><span>預計退休時資產</span><b id="gHave">—</b></div>
+        <div class="stmt total"><span>達成率</span><b id="gPct">—</b></div>
+        <p class="note" id="gNote" style="margin-top:8px"></p>
       </div>
-      <div class="kpi-row" id="rateRow" style="display:none">
-        <div class="kpi">
-          <div class="label">固定花費合計（今日幣值）</div>
-          <div class="value" id="kFixed">—</div>
-          <div class="hint" id="kFixedHint">訂閱＋水電＋其他固定（不含變動）</div>
-        </div>
-        <div class="kpi">
-          <div class="label">扣除固定花費後每月剩餘</div>
-          <div class="value" id="kRemain">—</div>
-          <div class="hint" id="kRemainHint"></div>
-        </div>
-      </div>
+
+      <details class="card" style="padding:12px 16px" id="moreNums">
+        <summary style="font-size:13px; font-weight:600; color:var(--ink-2); cursor:pointer">更多數字（名目金額、屆時幣值）</summary>
+        <div id="moreRows" style="margin-top:6px"></div>
+      </details>
 
       <div class="card">
         <h2>資產曲線（以今日幣值）</h2>
@@ -408,7 +413,7 @@
         </ol>
       </div>
 
-      <p class="note" style="text-align:center">退休試算 版本 v1.08<br>本 App 僅提供數學試算與記錄，不構成任何投資建議。</p>
+      <p class="note" style="text-align:center">退休試算 版本 v1.09<br>本 App 僅提供數學試算與記錄，不構成任何投資建議。</p>
     </section>
   </main>
 
@@ -679,61 +684,53 @@ function renderPlan() {
   const r = simulate(p);
 
   const fmtMo = n => Math.round(n).toLocaleString('zh-TW');
-  document.getElementById('kAtRetire').textContent = fmt(r.atRetireReal);
-  document.getElementById('kAtRetireNom').textContent = '名目金額約 ' + fmt(r.atRetireNom);
-  document.getElementById('kExpense').textContent = fmtMo(r.firstMonthlyW) + ' /月';
-
-  const neededRow = document.getElementById('neededRow');
-  neededRow.style.display = '';
   const yearsToRetire = p.retire - p.age;
-  if (p.mode === 'expense') {
-    /* 固定支出模式：需要準備多少退休金、達成率 */
-    document.getElementById('kN1Label').textContent = '需要準備的退休金（今日幣值）';
-    document.getElementById('kN2Label').textContent = '目標達成率';
-    const neededNom = solveNeeded(p);
-    const neededReal = neededNom / Math.pow(1 + p.infl / 100, yearsToRetire);
-    document.getElementById('kNeeded').textContent = fmt(neededReal);
-    document.getElementById('kNeededNom').textContent = '屆時名目金額約 ' + fmt(neededNom);
-    const pct = neededNom > 0 ? (r.atRetireNom / neededNom * 100) : 100;
-    document.getElementById('kGoal').textContent = Math.round(pct) + '%';
-    const gapReal = r.atRetireReal - neededReal;
-    document.getElementById('kGoalGap').textContent = gapReal >= 0
-      ? '超出目標約 ' + fmt(gapReal) + '（今日幣值）'
-      : '還差約 ' + fmt(-gapReal) + '（今日幣值）';
-  } else {
-    /* 提領率模式：每月實際可用多少（今日購買力） */
-    const inflToRetire = Math.pow(1 + p.infl / 100, yearsToRetire);
-    const wReal = r.firstMonthlyW / inflToRetire;
-    document.getElementById('kN1Label').textContent = '每月可提領（今日幣值）';
-    document.getElementById('kNeeded').textContent = fmtMo(wReal) + ' /月';
-    document.getElementById('kNeededNom').textContent = '屆時名目約 ' + fmtMo(r.firstMonthlyW) + ' /月';
-    document.getElementById('kN2Label').textContent = '加年金後每月可用（今日幣值）';
-    document.getElementById('kGoal').textContent = fmtMo(wReal + p.pension) + ' /月';
-    document.getElementById('kGoalGap').textContent = '含年金等其他收入 ' + fmtMo(p.pension) + ' /月';
-  }
+  const inflToRetire = Math.pow(1 + p.infl / 100, yearsToRetire);
+  const moreRows = [];
+  moreRows.push(['退休時資產', fmt(r.atRetireReal) + '（名目 ' + fmt(r.atRetireNom) + '）']);
+  moreRows.push(['退休首年每月提領（屆時幣值）', fmtMo(r.firstMonthlyW) + ' /月']);
 
-  /* 提領率模式：扣除固定花費後的每月剩餘（今日幣值） */
-  const rateRow = document.getElementById('rateRow');
   if (p.mode === 'rate') {
-    rateRow.style.display = '';
+    /* 提領率模式：帳單式現金流（今日幣值） */
+    document.getElementById('cashflowCard').style.display = '';
+    document.getElementById('goalCard').style.display = 'none';
     const f = state.fixed || {};
     const fixedOnly = (f.subs || 0) + (f.bills || 0) + (f.other || 0);
-    const inflToRetire2 = Math.pow(1 + p.infl / 100, yearsToRetire);
-    const wReal2 = r.firstMonthlyW / inflToRetire2;
-    const remain = wReal2 + p.pension - fixedOnly;
-    const fmtMo2 = n => Math.round(n).toLocaleString('zh-TW');
-    document.getElementById('kFixed').textContent = fmtMo2(fixedOnly) + ' /月';
-    document.getElementById('kFixedHint').textContent =
-      '訂閱＋水電＋其他固定；退休時屆時幣值約 ' + fmtMo2(fixedOnly * inflToRetire2) + ' /月';
-    const kRemain = document.getElementById('kRemain');
-    kRemain.textContent = fmtMo2(remain) + ' /月';
-    kRemain.style.color = remain >= 0 ? '' : 'var(--danger)';
-    document.getElementById('kRemainHint').textContent = remain >= 0
-      ? '退休時屆時幣值約 ' + fmtMo2(remain * inflToRetire2) + ' /月；可自由用於變動開銷'
-      : '⚠️ 不足以支付固定花費，需提高提領率或降低固定支出';
+    const wReal = r.firstMonthlyW / inflToRetire;
+    const remain = wReal + p.pension - fixedOnly;
+    document.getElementById('cfW').textContent = fmtMo(wReal);
+    document.getElementById('cfP').textContent = fmtMo(p.pension);
+    document.getElementById('cfF').textContent = fmtMo(fixedOnly);
+    const cfR = document.getElementById('cfR');
+    cfR.textContent = fmtMo(remain) + ' /月';
+    cfR.style.color = remain >= 0 ? '' : 'var(--danger)';
+    document.getElementById('cfNote').textContent = remain >= 0
+      ? '可自由花費即變動開銷（飲食、交通、娛樂）的額度。'
+      : '⚠️ 不足以支付固定花費，需提高提領率或降低固定支出。';
+    moreRows.push(['固定花費（屆時幣值）', fmtMo(fixedOnly * inflToRetire) + ' /月']);
+    moreRows.push(['可自由花費（屆時幣值）', fmtMo(remain * inflToRetire) + ' /月']);
   } else {
-    rateRow.style.display = 'none';
+    /* 固定支出模式：目標檢查 */
+    document.getElementById('goalCard').style.display = '';
+    document.getElementById('cashflowCard').style.display = 'none';
+    const neededNom = solveNeeded(p);
+    const neededReal = neededNom / inflToRetire;
+    document.getElementById('gNeed').textContent = fmt(neededReal);
+    document.getElementById('gHave').textContent = fmt(r.atRetireReal);
+    const pct = neededNom > 0 ? Math.round(r.atRetireNom / neededNom * 100) : 100;
+    const gPct = document.getElementById('gPct');
+    gPct.textContent = pct + '%';
+    gPct.style.color = pct >= 100 ? '' : 'var(--danger)';
+    const gapReal = r.atRetireReal - neededReal;
+    document.getElementById('gNote').textContent = gapReal >= 0
+      ? '超出目標約 ' + fmt(gapReal) + '（今日幣值）。'
+      : '還差約 ' + fmt(-gapReal) + '（今日幣值）。';
+    moreRows.push(['需要準備的退休金（屆時名目）', fmt(neededNom)]);
   }
+
+  document.getElementById('moreRows').innerHTML = moreRows.map(row =>
+    '<div class="more-row"><span>' + esc(row[0]) + '</span><b>' + esc(row[1]) + '</b></div>'
+  ).join('');
 
   const v = document.getElementById('verdict');
   if (r.depleteAge === null) {
