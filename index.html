@@ -292,7 +292,8 @@
             </div>
           </div>
           <div class="field" id="fldWRate" style="display:none"><label for="pWRate">年提領率 %（自行輸入，0.5–20）</label><input id="pWRate" type="number" inputmode="decimal" min="0.5" max="20" step="0.1" value="4"></div>
-          <div class="field"><label for="pPension">每月其他收入（年金等，今日幣值）</label><input id="pPension" type="number" inputmode="numeric" min="0" step="1000" value="0"></div>
+          <div class="field"><label for="pPensionIdx">其他收入—隨通膨調整 /月（勞保年金等，今日幣值）</label><input id="pPensionIdx" type="number" inputmode="numeric" min="0" step="1000" value="0"></div>
+          <div class="field"><label for="pPensionFix">其他收入—固定金額 /月（勞退月領等，不隨通膨調整）</label><input id="pPensionFix" type="number" inputmode="numeric" min="0" step="1000" value="0"></div>
           <div class="field"><label for="pInflation">通膨率 %</label><input id="pInflation" type="number" inputmode="decimal" step="0.05" value="1.49"></div>
           <div class="field"><label for="pPlanTo">規劃至歲數</label><input id="pPlanTo" type="number" inputmode="numeric" min="60" max="110" value="90"></div>
         </div>
@@ -413,7 +414,7 @@
         </ol>
       </div>
 
-      <p class="note" style="text-align:center">退休試算 版本 v1.09<br>本 App 僅提供數學試算與記錄，不構成任何投資建議。</p>
+      <p class="note" style="text-align:center">退休試算 版本 v1.10<br>本 App 僅提供數學試算與記錄，不構成任何投資建議。</p>
     </section>
   </main>
 
@@ -452,7 +453,7 @@ function cpiAvg(years) {
 }
 
 /* ================= 狀態 ================= */
-const PLAN_FIELDS = ['pAge', 'pRetire', 'pNow', 'pMonthly', 'pReturn', 'pReturnPost', 'pCash', 'pCashRate', 'pExpense', 'pWRate', 'pPension', 'pInflation', 'pPlanTo',
+const PLAN_FIELDS = ['pAge', 'pRetire', 'pNow', 'pMonthly', 'pReturn', 'pReturnPost', 'pCash', 'pCashRate', 'pExpense', 'pWRate', 'pPensionIdx', 'pPensionFix', 'pInflation', 'pPlanTo',
   'liSalary', 'liYears', 'lpBalance', 'lpWage', 'lpSelf', 'lpReturn', 'lpYears'];
 const ASSET_FIELDS = ['aCash', 'aStock', 'aBond', 'aHouse', 'aIns', 'aOther'];
 
@@ -549,7 +550,8 @@ function simulate(p) {
         gross = p.expense * inflFromNow;
       }
       /* 年金以今日幣值輸入，隨通膨墊高後折抵 */
-      let w = Math.max(0, gross - p.pension * inflFromNow);
+      /* 隨通膨調整的收入（勞保年金）逐月墊高；固定金額收入（勞退月領）維持名目不變 */
+      let w = Math.max(0, gross - ((p.pensionIdx || 0) * inflFromNow + (p.pensionFix || 0)));
       /* 先花現金、再動股票 */
       if (C >= w) { C -= w; w = 0; }
       else { w -= C; C = 0; A -= w; }
@@ -611,7 +613,7 @@ function readPlan() {
     cash: num('pCash'), cashRate: num('pCashRate'),
     expenseInput, expUnit,
     expense: expUnit === 'year' ? expenseInput / 12 : expenseInput,
-    pension: num('pPension'),
+    pensionIdx: num('pPensionIdx'), pensionFix: num('pPensionFix'),
     mode: document.getElementById('pWMode').value,
     wRate: num('pWRate') || 4,
     infl: num('pInflation'), planTo: num('pPlanTo'),
@@ -659,7 +661,8 @@ function solveNeeded(p) {
   const base = Object.assign({}, p, {
     age: p.retire, now: 0, cash: 0, monthly: 0, rPre: 0, mode: 'expense',
     expense: p.expense * inflToRetire,
-    pension: p.pension * inflToRetire
+    pensionIdx: p.pensionIdx * inflToRetire,   /* 縮短版模擬以退休日為起點，通膨連動收入先墊高到屆時 */
+    pensionFix: p.pensionFix                    /* 固定金額收入維持名目 */
   });
   const survives = (K) => simulate(Object.assign({}, base, { now: K })).depleteAge === null;
   let hi = 1000000;
@@ -697,9 +700,11 @@ function renderPlan() {
     const f = state.fixed || {};
     const fixedOnly = (f.subs || 0) + (f.bills || 0) + (f.other || 0);
     const wReal = r.firstMonthlyW / inflToRetire;
-    const remain = wReal + p.pension - fixedOnly;
+    /* 退休首年的其他收入（今日幣值）：通膨連動型不變，固定金額型先折現 */
+    const pensionReal = p.pensionIdx + p.pensionFix / inflToRetire;
+    const remain = wReal + pensionReal - fixedOnly;
     document.getElementById('cfW').textContent = fmtMo(wReal);
-    document.getElementById('cfP').textContent = fmtMo(p.pension);
+    document.getElementById('cfP').textContent = fmtMo(pensionReal);
     document.getElementById('cfF').textContent = fmtMo(fixedOnly);
     const cfR = document.getElementById('cfR');
     cfR.textContent = fmtMo(remain) + ' /月';
@@ -762,9 +767,10 @@ function renderPlan() {
 
 document.getElementById('btnApplyPension').addEventListener('click', () => {
   const e = estimatePension(readPlan());
-  document.getElementById('pPension').value = e.li + e.lp;
+  document.getElementById('pPensionIdx').value = e.li;   /* 勞保年金：法定通膨連動 */
+  document.getElementById('pPensionFix').value = e.lp;   /* 勞退月領：固定金額 */
   renderPlan();
-  toast('已帶入每月其他收入 ' + (e.li + e.lp).toLocaleString('zh-TW') + ' 元');
+  toast('已帶入：勞保 ' + e.li.toLocaleString('zh-TW') + '（通膨連動）、勞退 ' + e.lp.toLocaleString('zh-TW') + '（固定）');
 });
 
 /* 提領模式切換 */
@@ -1104,7 +1110,9 @@ document.querySelectorAll('nav.tabbar button').forEach(btn => {
 });
 
 function restoreInputs() {
-  const map = { age: 'pAge', retire: 'pRetire', now: 'pNow', monthly: 'pMonthly', rPre: 'pReturn', rPost: 'pReturnPost', cash: 'pCash', cashRate: 'pCashRate', expenseInput: 'pExpense', wRate: 'pWRate', pension: 'pPension', infl: 'pInflation', planTo: 'pPlanTo',
+  /* 舊版單一 pension 欄位的資料，遷移到通膨連動欄 */
+  if (state.plan.pension != null && state.plan.pensionIdx == null) state.plan.pensionIdx = state.plan.pension;
+  const map = { age: 'pAge', retire: 'pRetire', now: 'pNow', monthly: 'pMonthly', rPre: 'pReturn', rPost: 'pReturnPost', cash: 'pCash', cashRate: 'pCashRate', expenseInput: 'pExpense', wRate: 'pWRate', pensionIdx: 'pPensionIdx', pensionFix: 'pPensionFix', infl: 'pInflation', planTo: 'pPlanTo',
     liSalary: 'liSalary', liYears: 'liYears', lpBalance: 'lpBalance', lpWage: 'lpWage', lpSelf: 'lpSelf', lpReturn: 'lpReturn', lpYears: 'lpYears' };
   Object.keys(map).forEach(k => {
     if (state.plan[k] != null) document.getElementById(map[k]).value = state.plan[k];
