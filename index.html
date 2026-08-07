@@ -221,14 +221,26 @@
       </div>
       <div class="kpi-row" id="neededRow">
         <div class="kpi">
-          <div class="label">需要準備的退休金（今日幣值）</div>
+          <div class="label" id="kN1Label">需要準備的退休金（今日幣值）</div>
           <div class="value" id="kNeeded">—</div>
           <div class="hint" id="kNeededNom"></div>
         </div>
         <div class="kpi">
-          <div class="label">目標達成率</div>
+          <div class="label" id="kN2Label">目標達成率</div>
           <div class="value" id="kGoal">—</div>
           <div class="hint" id="kGoalGap"></div>
+        </div>
+      </div>
+      <div class="kpi-row" id="rateRow" style="display:none">
+        <div class="kpi">
+          <div class="label">固定花費合計（今日幣值）</div>
+          <div class="value" id="kFixed">—</div>
+          <div class="hint">訂閱＋水電＋其他固定（不含變動）</div>
+        </div>
+        <div class="kpi">
+          <div class="label">扣除固定花費後每月剩餘</div>
+          <div class="value" id="kRemain">—</div>
+          <div class="hint" id="kRemainHint"></div>
         </div>
       </div>
 
@@ -396,7 +408,7 @@
         </ol>
       </div>
 
-      <p class="note" style="text-align:center">退休試算 版本 v1.06<br>本 App 僅提供數學試算與記錄，不構成任何投資建議。</p>
+      <p class="note" style="text-align:center">退休試算 版本 v1.07<br>本 App 僅提供數學試算與記錄，不構成任何投資建議。</p>
     </section>
   </main>
 
@@ -666,15 +678,18 @@ function renderPlan() {
   }
   const r = simulate(p);
 
+  const fmtMo = n => Math.round(n).toLocaleString('zh-TW');
   document.getElementById('kAtRetire').textContent = fmt(r.atRetireReal);
   document.getElementById('kAtRetireNom').textContent = '名目金額約 ' + fmt(r.atRetireNom);
-  document.getElementById('kExpense').textContent = fmt(r.firstMonthlyW) + ' /月';
+  document.getElementById('kExpense').textContent = fmtMo(r.firstMonthlyW) + ' /月';
 
-  /* 需要準備的退休金（固定支出模式才有意義） */
   const neededRow = document.getElementById('neededRow');
+  neededRow.style.display = '';
+  const yearsToRetire = p.retire - p.age;
   if (p.mode === 'expense') {
-    neededRow.style.display = '';
-    const yearsToRetire = p.retire - p.age;
+    /* 固定支出模式：需要準備多少退休金、達成率 */
+    document.getElementById('kN1Label').textContent = '需要準備的退休金（今日幣值）';
+    document.getElementById('kN2Label').textContent = '目標達成率';
     const neededNom = solveNeeded(p);
     const neededReal = neededNom / Math.pow(1 + p.infl / 100, yearsToRetire);
     document.getElementById('kNeeded').textContent = fmt(neededReal);
@@ -686,7 +701,36 @@ function renderPlan() {
       ? '超出目標約 ' + fmt(gapReal) + '（今日幣值）'
       : '還差約 ' + fmt(-gapReal) + '（今日幣值）';
   } else {
-    neededRow.style.display = 'none';
+    /* 提領率模式：每月實際可用多少（今日購買力） */
+    const inflToRetire = Math.pow(1 + p.infl / 100, yearsToRetire);
+    const wReal = r.firstMonthlyW / inflToRetire;
+    document.getElementById('kN1Label').textContent = '每月可提領（今日幣值）';
+    document.getElementById('kNeeded').textContent = fmtMo(wReal) + ' /月';
+    document.getElementById('kNeededNom').textContent = '屆時名目約 ' + fmtMo(r.firstMonthlyW) + ' /月';
+    document.getElementById('kN2Label').textContent = '加年金後每月可用（今日幣值）';
+    document.getElementById('kGoal').textContent = fmtMo(wReal + p.pension) + ' /月';
+    document.getElementById('kGoalGap').textContent = '含年金等其他收入 ' + fmtMo(p.pension) + ' /月';
+  }
+
+  /* 提領率模式：扣除固定花費後的每月剩餘（今日幣值） */
+  const rateRow = document.getElementById('rateRow');
+  if (p.mode === 'rate') {
+    rateRow.style.display = '';
+    const f = state.fixed || {};
+    const fixedOnly = (f.subs || 0) + (f.bills || 0) + (f.other || 0);
+    const inflToRetire2 = Math.pow(1 + p.infl / 100, yearsToRetire);
+    const wReal2 = r.firstMonthlyW / inflToRetire2;
+    const remain = wReal2 + p.pension - fixedOnly;
+    const fmtMo2 = n => Math.round(n).toLocaleString('zh-TW');
+    document.getElementById('kFixed').textContent = fmtMo2(fixedOnly) + ' /月';
+    const kRemain = document.getElementById('kRemain');
+    kRemain.textContent = fmtMo2(remain) + ' /月';
+    kRemain.style.color = remain >= 0 ? '' : 'var(--danger)';
+    document.getElementById('kRemainHint').textContent = remain >= 0
+      ? '可自由用於飲食、交通、娛樂等變動開銷'
+      : '⚠️ 不足以支付固定花費，需提高提領率或降低固定支出';
+  } else {
+    rateRow.style.display = 'none';
   }
 
   const v = document.getElementById('verdict');
@@ -860,6 +904,7 @@ function updateFixedDisplay() {
     state.fixed.variable = num('fVariable');
     save();
     updateFixedDisplay();
+    renderPlan();   /* 提領率模式的「剩餘」KPI 需同步刷新 */
   });
 });
 
@@ -872,6 +917,7 @@ function absorbFixedData(d) {
   if (bills) { state.fixed.bills = bills.monthly; state.fixed.billsCount = bills.count; }
   save();
   updateFixedDisplay();
+  renderPlan();
   return true;
 }
 
