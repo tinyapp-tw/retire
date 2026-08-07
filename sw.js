@@ -1,5 +1,5 @@
 /* 退休試算 Service Worker — 離線快取 */
-const CACHE = 'retire-v1.03';
+const CACHE = 'retire-v1.04';
 const PRECACHE = [
   './',
   './index.html',

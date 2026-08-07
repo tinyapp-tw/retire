@@ -243,12 +243,15 @@
         <div class="grid2">
           <div class="field"><label for="pAge">目前年齡</label><input id="pAge" type="number" inputmode="numeric" min="18" max="80" value="35"></div>
           <div class="field"><label for="pRetire">預計退休年齡</label><input id="pRetire" type="number" inputmode="numeric" min="30" max="90" value="60"></div>
-          <div class="field"><label for="pNow">目前總資產</label><input id="pNow" type="number" inputmode="numeric" min="0" step="10000" value="1000000"></div>
-          <div class="field"><label for="pMonthly">每月投入</label><input id="pMonthly" type="number" inputmode="numeric" min="0" step="1000" value="15000"></div>
-          <div class="field"><label for="pReturn">退休前年報酬率 %</label><input id="pReturn" type="number" inputmode="decimal" step="0.1" value="5"></div>
-          <div class="field"><label for="pReturnPost">退休後年報酬率 %</label><input id="pReturnPost" type="number" inputmode="decimal" step="0.1" value="3"></div>
+          <div class="field"><label for="pNow">目前股票/投資資產</label><input id="pNow" type="number" inputmode="numeric" min="0" step="10000" value="1000000"></div>
+          <div class="field"><label for="pMonthly">每月投入（進股票）</label><input id="pMonthly" type="number" inputmode="numeric" min="0" step="1000" value="15000"></div>
+          <div class="field"><label for="pReturn">股票年報酬率 %（退休前）</label><input id="pReturn" type="number" inputmode="decimal" step="0.1" value="5"></div>
+          <div class="field"><label for="pReturnPost">股票年報酬率 %（退休後）</label><input id="pReturnPost" type="number" inputmode="decimal" step="0.1" value="3"></div>
+          <div class="field"><label for="pCash">目前現金存款</label><input id="pCash" type="number" inputmode="numeric" min="0" step="10000" value="0"></div>
+          <div class="field"><label for="pCashRate">存款年利率 %（適用現金）</label><input id="pCashRate" type="number" inputmode="decimal" step="0.05" value="1.5"></div>
         </div>
-        <button class="btn ghost small" id="btnUseSnap" style="margin-top:4px">用最新資產快照帶入總資產</button>
+        <button class="btn ghost small" id="btnUseSnap" style="margin-top:4px">帶入最新快照（股票、現金分欄；其他類別不帶入）</button>
+        <p class="note" style="margin-top:8px">股票與現金分開複利：股票用上方報酬率，現金用存款利率。退休提領時<b>先花現金、再動股票</b>。</p>
       </div>
 
       <div class="card">
@@ -375,7 +378,7 @@
         </ol>
       </div>
 
-      <p class="note" style="text-align:center">退休試算 版本 v1.03<br>本 App 僅提供數學試算與記錄，不構成任何投資建議。</p>
+      <p class="note" style="text-align:center">退休試算 版本 v1.04<br>本 App 僅提供數學試算與記錄，不構成任何投資建議。</p>
     </section>
   </main>
 
@@ -414,7 +417,7 @@ function cpiAvg(years) {
 }
 
 /* ================= 狀態 ================= */
-const PLAN_FIELDS = ['pAge', 'pRetire', 'pNow', 'pMonthly', 'pReturn', 'pReturnPost', 'pExpense', 'pWRate', 'pPension', 'pInflation', 'pPlanTo',
+const PLAN_FIELDS = ['pAge', 'pRetire', 'pNow', 'pMonthly', 'pReturn', 'pReturnPost', 'pCash', 'pCashRate', 'pExpense', 'pWRate', 'pPension', 'pInflation', 'pPlanTo',
   'liSalary', 'liYears', 'lpBalance', 'lpWage', 'lpSelf', 'lpReturn', 'lpYears'];
 const ASSET_FIELDS = ['aCash', 'aStock', 'aBond', 'aHouse', 'aIns', 'aOther'];
 
@@ -476,28 +479,33 @@ function simulate(p) {
   const retireM = Math.max(0, Math.round((p.retire - p.age) * 12));
   const rPre = Math.pow(1 + p.rPre / 100, 1 / 12) - 1;
   const rPost = Math.pow(1 + p.rPost / 100, 1 / 12) - 1;
+  const rCash = Math.pow(1 + (p.cashRate || 0) / 100, 1 / 12) - 1;
   const infl = p.infl / 100;
   const mode = p.mode || 'expense';
-  let A = p.now;
+  let A = p.now;              /* 股票桶 */
+  let C = p.cash || 0;        /* 現金桶（獨立利率） */
   let atRetireNom = null;
-  let baseW = 0;          /* 提領率模式：退休首年的每月提領（屆時幣值） */
+  let baseW = 0;              /* 提領率模式：退休首年的每月提領（屆時幣值） */
   let depleteAge = null;
   let depleted = false;
-  const yearly = [{ age: p.age, real: A, nom: A }];
+  const yearly = [{ age: p.age, real: A + C, nom: A + C }];
 
   for (let m = 1; m <= months; m++) {
     const yearsFromNow = m / 12;
     if (m <= retireM) {
-      A = A * (1 + rPre) + p.monthly;
+      A = A * (1 + rPre) + p.monthly;   /* 每月投入進股票 */
+      C = C * (1 + rCash);
       if (m === retireM) {
-        atRetireNom = A;
-        if (mode === 'rate') baseW = A * (p.wRate / 100) / 12;
+        atRetireNom = A + C;
+        if (mode === 'rate') baseW = (A + C) * (p.wRate / 100) / 12;
       }
     } else if (!depleted) {
+      A = A * (1 + rPost);
+      C = C * (1 + rCash);
       const inflFromNow = Math.pow(1 + infl, yearsFromNow);
       let gross;
       if (mode === 'rate') {
-        /* 提領金額在退休時定錨，之後隨通膨調升（4% 法則作法） */
+        /* 提領金額在退休時定錨，之後隨通膨調升 */
         const yearsFromRetire = (m - retireM) / 12;
         gross = baseW * Math.pow(1 + infl, yearsFromRetire);
       } else {
@@ -505,31 +513,33 @@ function simulate(p) {
         gross = p.expense * inflFromNow;
       }
       /* 年金以今日幣值輸入，隨通膨墊高後折抵 */
-      const netExpense = Math.max(0, gross - p.pension * inflFromNow);
-      A = A * (1 + rPost) - netExpense;
-      if (A <= 0) {
+      let w = Math.max(0, gross - p.pension * inflFromNow);
+      /* 先花現金、再動股票 */
+      if (C >= w) { C -= w; w = 0; }
+      else { w -= C; C = 0; A -= w; }
+      if (A <= 0 && C <= 0) {
         depleted = true;
         depleteAge = p.age + yearsFromNow;
-        A = 0;  /* 耗盡後歸零，曲線停在 0 */
+        A = 0; C = 0;  /* 耗盡後歸零，曲線停在 0 */
       }
     }
     if (m % 12 === 0 || m === months) {
       yearly.push({
         age: p.age + yearsFromNow,
-        nom: A,
-        real: A / Math.pow(1 + infl, yearsFromNow)
+        nom: A + C,
+        real: (A + C) / Math.pow(1 + infl, yearsFromNow)
       });
     }
   }
-  if (atRetireNom === null) atRetireNom = A;
+  if (atRetireNom === null) atRetireNom = A + C;
   const yearsToRetire = Math.max(0, p.retire - p.age);
   return {
     yearly,
     atRetireNom,
     atRetireReal: atRetireNom / Math.pow(1 + infl, yearsToRetire),
     firstMonthlyW: mode === 'rate' ? baseW : p.expense * Math.pow(1 + infl, yearsToRetire),
-    endBalance: A,
-    endBalanceReal: A / Math.pow(1 + infl, months / 12),
+    endBalance: A + C,
+    endBalanceReal: (A + C) / Math.pow(1 + infl, months / 12),
     depleteAge
   };
 }
@@ -562,6 +572,7 @@ function readPlan() {
   return {
     age: num('pAge'), retire: num('pRetire'), now: num('pNow'), monthly: num('pMonthly'),
     rPre: num('pReturn'), rPost: num('pReturnPost'),
+    cash: num('pCash'), cashRate: num('pCashRate'),
     expenseInput, expUnit,
     expense: expUnit === 'year' ? expenseInput / 12 : expenseInput,
     pension: num('pPension'),
@@ -610,7 +621,7 @@ function solveNeeded(p) {
   const inflToRetire = Math.pow(1 + p.infl / 100, yearsToRetire);
   /* 以「退休當下」為起點的縮短版模擬：支出/年金先墊高到屆時幣值 */
   const base = Object.assign({}, p, {
-    age: p.retire, now: 0, monthly: 0, rPre: 0, mode: 'expense',
+    age: p.retire, now: 0, cash: 0, monthly: 0, rPre: 0, mode: 'expense',
     expense: p.expense * inflToRetire,
     pension: p.pension * inflToRetire
   });
@@ -763,9 +774,11 @@ document.getElementById('btnApplyCpi').addEventListener('click', () => {
 document.getElementById('btnUseSnap').addEventListener('click', () => {
   if (!state.snaps.length) { toast('還沒有資產快照，先到「資產」分頁記錄'); return; }
   const latest = state.snaps[state.snaps.length - 1];
-  document.getElementById('pNow').value = latest.total;
+  const b = latest.breakdown || {};
+  document.getElementById('pNow').value = b.aStock || 0;
+  document.getElementById('pCash').value = b.aCash || 0;
   renderPlan();
-  toast('已帶入 ' + latest.date + ' 的快照總額');
+  toast('已帶入 ' + latest.date + '：股票 ' + fmt(b.aStock || 0) + '、現金 ' + fmt(b.aCash || 0) + '（其他類別未帶入）');
 });
 
 /* ================= 資產快照 ================= */
@@ -912,7 +925,7 @@ document.querySelectorAll('nav.tabbar button').forEach(btn => {
 });
 
 function restoreInputs() {
-  const map = { age: 'pAge', retire: 'pRetire', now: 'pNow', monthly: 'pMonthly', rPre: 'pReturn', rPost: 'pReturnPost', expenseInput: 'pExpense', wRate: 'pWRate', pension: 'pPension', infl: 'pInflation', planTo: 'pPlanTo',
+  const map = { age: 'pAge', retire: 'pRetire', now: 'pNow', monthly: 'pMonthly', rPre: 'pReturn', rPost: 'pReturnPost', cash: 'pCash', cashRate: 'pCashRate', expenseInput: 'pExpense', wRate: 'pWRate', pension: 'pPension', infl: 'pInflation', planTo: 'pPlanTo',
     liSalary: 'liSalary', liYears: 'liYears', lpBalance: 'lpBalance', lpWage: 'lpWage', lpSelf: 'lpSelf', lpReturn: 'lpReturn', lpYears: 'lpYears' };
   Object.keys(map).forEach(k => {
     if (state.plan[k] != null) document.getElementById(map[k]).value = state.plan[k];
