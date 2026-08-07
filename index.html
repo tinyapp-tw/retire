@@ -214,9 +214,21 @@
           <div class="hint" id="kAtRetireNom"></div>
         </div>
         <div class="kpi">
-          <div class="label">退休時每月支出（屆時幣值）</div>
+          <div class="label">退休首年每月提領（屆時幣值）</div>
           <div class="value" id="kExpense">—</div>
-          <div class="hint">今日支出隨通膨墊高</div>
+          <div class="hint">今日金額隨通膨墊高</div>
+        </div>
+      </div>
+      <div class="kpi-row" id="neededRow">
+        <div class="kpi">
+          <div class="label">需要準備的退休金（今日幣值）</div>
+          <div class="value" id="kNeeded">—</div>
+          <div class="hint" id="kNeededNom"></div>
+        </div>
+        <div class="kpi">
+          <div class="label">目標達成率</div>
+          <div class="value" id="kGoal">—</div>
+          <div class="hint" id="kGoalGap"></div>
         </div>
       </div>
 
@@ -242,16 +254,39 @@
       <div class="card">
         <h2>退休後的生活</h2>
         <div class="grid2">
-          <div class="field"><label for="pExpense">每月支出（今日幣值）</label><input id="pExpense" type="number" inputmode="numeric" min="0" step="1000" value="50000"></div>
+          <div class="field">
+            <label for="pWMode">提領模式</label>
+            <select id="pWMode">
+              <option value="expense">固定支出（每月金額）</option>
+              <option value="rate">提領率（4% 法則式）</option>
+            </select>
+          </div>
+          <div class="field" id="fldExpense">
+            <label for="pExpense">退休後支出（今日幣值）</label>
+            <div style="display:flex; gap:6px">
+              <input id="pExpense" type="number" inputmode="numeric" min="0" step="1000" value="50000" style="flex:1">
+              <select id="pExpUnit" style="width:84px; font-family:inherit; font-size:15px; border:1px solid var(--hairline); border-radius:10px; background:var(--page); color:var(--ink-1); padding:0 8px">
+                <option value="month">每月</option>
+                <option value="year">每年</option>
+              </select>
+            </div>
+          </div>
+          <div class="field" id="fldWRate" style="display:none"><label for="pWRate">年提領率 %（退休首年提領資產的比例）</label><input id="pWRate" type="number" inputmode="decimal" min="0.5" max="20" step="0.1" value="4"></div>
           <div class="field"><label for="pPension">每月其他收入（年金等，今日幣值）</label><input id="pPension" type="number" inputmode="numeric" min="0" step="1000" value="0"></div>
           <div class="field"><label for="pInflation">通膨率 %</label><input id="pInflation" type="number" inputmode="decimal" step="0.05" value="1.49"></div>
           <div class="field"><label for="pPlanTo">規劃至歲數</label><input id="pPlanTo" type="number" inputmode="numeric" min="60" max="110" value="90"></div>
         </div>
-        <div class="form-actions" style="flex-direction:row; gap:8px">
-          <button class="btn ghost small" data-inf="10">用近10年官方平均 1.49%</button>
-          <button class="btn ghost small" data-inf="20">用近20年平均 1.30%</button>
+        <p class="note" id="wModeNote" style="display:none; margin-top:0">提領率模式：退休首年提領「退休時資產 × 提領率」，之後每年隨通膨調升提領金額（經典 4% 法則作法）。</p>
+        <div class="grid2">
+          <div class="field">
+            <label for="pCpiYears">以官方 CPI 近幾年平均當基準（1–45）</label>
+            <input id="pCpiYears" type="number" inputmode="numeric" min="1" max="45" value="10">
+          </div>
+          <div class="field" style="display:flex; align-items:flex-end">
+            <button class="btn ghost" id="btnApplyCpi" style="width:100%">套用平均 <b id="cpiPreview"></b></button>
+          </div>
         </div>
-        <p class="note">通膨預設值來自主計總處歷年 CPI 年增率（見「設定」分頁）。</p>
+        <p class="note">通膨基準來自主計總處歷年 CPI 年增率（2001–2025，完整表見「設定」分頁）。年數愈短愈反映近期物價，愈長愈平滑。</p>
       </div>
     </section>
 
@@ -286,7 +321,7 @@
       <div class="card">
         <h2>官方通膨資料（主計總處 CPI 年增率）</h2>
         <div class="cpi-grid" id="cpiGrid"></div>
-        <p class="note">資料來源：行政院主計總處歷年消費者物價指數年增率（2001–2025）。近 10 年平均 <b id="cpiAvg10">—</b>、近 20 年平均 <b id="cpiAvg20">—</b>。主計總處每年公布上一年度數據後，App 會隨版本更新內建值。</p>
+        <p class="note">資料涵蓋 1981–2025 共 45 年。<b>2001 年起</b>為行政院主計總處公布之精確值；<b>1981–2000</b> 為國際統計彙整之近似值（±0.1%）。近 10 年平均 <b id="cpiAvg10">—</b>、近 20 年平均 <b id="cpiAvg20">—</b>。主計總處每年一月公布上一年度數據後，App 會隨版本更新內建值。</p>
       </div>
 
       <div class="card">
@@ -310,7 +345,7 @@
         </ol>
       </div>
 
-      <p class="note" style="text-align:center">退休試算 版本 v1.00<br>本 App 僅提供數學試算與記錄，不構成任何投資建議。</p>
+      <p class="note" style="text-align:center">退休試算 版本 v1.01<br>本 App 僅提供數學試算與記錄，不構成任何投資建議。</p>
     </section>
   </main>
 
@@ -328,21 +363,28 @@
 
 const STORE_KEY = 'retire.data.v1';
 
-/* ================= 官方 CPI 年增率（%），主計總處 2001–2025 ================= */
+/* ================= CPI 年增率（%）=================
+   2001–2025：主計總處精確值；1981–2000：國際彙整近似值（±0.1%）。
+   每年一月主計總處公布上一年度數據後，於此新增一筆並發布新版本。 */
 const CPI = {
+  1981: 10.9,  1982: 3.0,   1983: 1.4,   1984: 0.0,   1985: -0.2,
+  1986: 0.7,   1987: 0.5,   1988: 1.3,   1989: 4.4,   1990: 4.1,
+  1991: 3.6,   1992: 4.5,   1993: 2.9,   1994: 4.1,   1995: 3.7,
+  1996: 3.1,   1997: 0.9,   1998: 1.7,   1999: 0.2,   2000: 1.2,
   2001: -0.01, 2002: -0.20, 2003: -0.28, 2004: 1.61, 2005: 2.31,
   2006: 0.60,  2007: 1.80,  2008: 3.52,  2009: -0.87, 2010: 0.97,
   2011: 1.42,  2012: 1.93,  2013: 0.79,  2014: 1.20,  2015: -0.30,
   2016: 1.39,  2017: 0.62,  2018: 1.35,  2019: 0.56,  2020: -0.23,
   2021: 1.97,  2022: 2.95,  2023: 2.49,  2024: 2.18,  2025: 1.66
 };
+const CPI_MAX_YEARS = Object.keys(CPI).length;
 function cpiAvg(years) {
   const ys = Object.keys(CPI).map(Number).sort((a, b) => b - a).slice(0, years);
   return ys.reduce((s, y) => s + CPI[y], 0) / ys.length;
 }
 
 /* ================= 狀態 ================= */
-const PLAN_FIELDS = ['pAge', 'pRetire', 'pNow', 'pMonthly', 'pReturn', 'pReturnPost', 'pExpense', 'pPension', 'pInflation', 'pPlanTo'];
+const PLAN_FIELDS = ['pAge', 'pRetire', 'pNow', 'pMonthly', 'pReturn', 'pReturnPost', 'pExpense', 'pWRate', 'pPension', 'pInflation', 'pPlanTo'];
 const ASSET_FIELDS = ['aCash', 'aStock', 'aBond', 'aHouse', 'aIns', 'aOther'];
 
 let state = load();
@@ -404,8 +446,10 @@ function simulate(p) {
   const rPre = Math.pow(1 + p.rPre / 100, 1 / 12) - 1;
   const rPost = Math.pow(1 + p.rPost / 100, 1 / 12) - 1;
   const infl = p.infl / 100;
+  const mode = p.mode || 'expense';
   let A = p.now;
   let atRetireNom = null;
+  let baseW = 0;          /* 提領率模式：退休首年的每月提領（屆時幣值） */
   let depleteAge = null;
   let depleted = false;
   const yearly = [{ age: p.age, real: A, nom: A }];
@@ -414,10 +458,23 @@ function simulate(p) {
     const yearsFromNow = m / 12;
     if (m <= retireM) {
       A = A * (1 + rPre) + p.monthly;
+      if (m === retireM) {
+        atRetireNom = A;
+        if (mode === 'rate') baseW = A * (p.wRate / 100) / 12;
+      }
     } else if (!depleted) {
-      /* 支出與年金皆以今日幣值輸入，隨通膨逐月墊高 */
-      const inflFactor = Math.pow(1 + infl, yearsFromNow);
-      const netExpense = Math.max(0, (p.expense - p.pension) * inflFactor);
+      const inflFromNow = Math.pow(1 + infl, yearsFromNow);
+      let gross;
+      if (mode === 'rate') {
+        /* 提領金額在退休時定錨，之後隨通膨調升（4% 法則作法） */
+        const yearsFromRetire = (m - retireM) / 12;
+        gross = baseW * Math.pow(1 + infl, yearsFromRetire);
+      } else {
+        /* 支出以今日幣值輸入，隨通膨逐月墊高 */
+        gross = p.expense * inflFromNow;
+      }
+      /* 年金以今日幣值輸入，隨通膨墊高後折抵 */
+      const netExpense = Math.max(0, gross - p.pension * inflFromNow);
       A = A * (1 + rPost) - netExpense;
       if (A <= 0) {
         depleted = true;
@@ -425,7 +482,6 @@ function simulate(p) {
         A = 0;  /* 耗盡後歸零，曲線停在 0 */
       }
     }
-    if (m === retireM) atRetireNom = A;
     if (m % 12 === 0 || m === months) {
       yearly.push({
         age: p.age + yearsFromNow,
@@ -440,11 +496,22 @@ function simulate(p) {
     yearly,
     atRetireNom,
     atRetireReal: atRetireNom / Math.pow(1 + infl, yearsToRetire),
-    expenseAtRetire: p.expense * Math.pow(1 + infl, yearsToRetire),
+    firstMonthlyW: mode === 'rate' ? baseW : p.expense * Math.pow(1 + infl, yearsToRetire),
     endBalance: A,
     endBalanceReal: A / Math.pow(1 + infl, months / 12),
     depleteAge
   };
+}
+
+/* 求解：可持續的年提領率（撐到規劃歲數的最大值，二分搜尋） */
+function solveRate(p) {
+  let lo = 0, hi = 20;
+  for (let i = 0; i < 40; i++) {
+    const mid = (lo + hi) / 2;
+    const r = simulate(Object.assign({}, p, { mode: 'rate', wRate: mid }));
+    if (r.depleteAge === null) lo = mid; else hi = mid;
+  }
+  return lo;
 }
 
 /* 求解：要撐到規劃歲數，每月需投入多少（二分搜尋） */
@@ -459,12 +526,41 @@ function solveMonthly(p) {
 }
 
 function readPlan() {
+  const expUnit = document.getElementById('pExpUnit').value;
+  const expenseInput = num('pExpense');
   return {
     age: num('pAge'), retire: num('pRetire'), now: num('pNow'), monthly: num('pMonthly'),
     rPre: num('pReturn'), rPost: num('pReturnPost'),
-    expense: num('pExpense'), pension: num('pPension'),
-    infl: num('pInflation'), planTo: num('pPlanTo')
+    expenseInput, expUnit,
+    expense: expUnit === 'year' ? expenseInput / 12 : expenseInput,
+    pension: num('pPension'),
+    mode: document.getElementById('pWMode').value,
+    wRate: num('pWRate') || 4,
+    infl: num('pInflation'), planTo: num('pPlanTo'),
+    cpiYears: num('pCpiYears') || 10
   };
+}
+
+/* 求解：要撐到規劃歲數，退休當下需要多少資產（固定支出模式，二分＋倍增搜尋） */
+function solveNeeded(p) {
+  const yearsToRetire = Math.max(0, p.retire - p.age);
+  const inflToRetire = Math.pow(1 + p.infl / 100, yearsToRetire);
+  /* 以「退休當下」為起點的縮短版模擬：支出/年金先墊高到屆時幣值 */
+  const base = Object.assign({}, p, {
+    age: p.retire, now: 0, monthly: 0, rPre: 0, mode: 'expense',
+    expense: p.expense * inflToRetire,
+    pension: p.pension * inflToRetire
+  });
+  const survives = (K) => simulate(Object.assign({}, base, { now: K })).depleteAge === null;
+  let hi = 1000000;
+  let guard = 0;
+  while (!survives(hi) && guard < 30) { hi *= 2; guard++; }
+  let lo = 0;
+  for (let i = 0; i < 50; i++) {
+    const mid = (lo + hi) / 2;
+    if (survives(mid)) hi = mid; else lo = mid;
+  }
+  return hi;   /* 屆時幣值 */
 }
 
 function renderPlan() {
@@ -479,7 +575,26 @@ function renderPlan() {
 
   document.getElementById('kAtRetire').textContent = fmt(r.atRetireReal);
   document.getElementById('kAtRetireNom').textContent = '名目金額約 ' + fmt(r.atRetireNom);
-  document.getElementById('kExpense').textContent = fmt(r.expenseAtRetire) + ' /月';
+  document.getElementById('kExpense').textContent = fmt(r.firstMonthlyW) + ' /月';
+
+  /* 需要準備的退休金（固定支出模式才有意義） */
+  const neededRow = document.getElementById('neededRow');
+  if (p.mode === 'expense') {
+    neededRow.style.display = '';
+    const yearsToRetire = p.retire - p.age;
+    const neededNom = solveNeeded(p);
+    const neededReal = neededNom / Math.pow(1 + p.infl / 100, yearsToRetire);
+    document.getElementById('kNeeded').textContent = fmt(neededReal);
+    document.getElementById('kNeededNom').textContent = '屆時名目金額約 ' + fmt(neededNom);
+    const pct = neededNom > 0 ? (r.atRetireNom / neededNom * 100) : 100;
+    document.getElementById('kGoal').textContent = Math.round(pct) + '%';
+    const gapReal = r.atRetireReal - neededReal;
+    document.getElementById('kGoalGap').textContent = gapReal >= 0
+      ? '超出目標約 ' + fmt(gapReal) + '（今日幣值）'
+      : '還差約 ' + fmt(-gapReal) + '（今日幣值）';
+  } else {
+    neededRow.style.display = 'none';
+  }
 
   const v = document.getElementById('verdict');
   if (r.depleteAge === null) {
@@ -489,17 +604,34 @@ function renderPlan() {
       '到 ' + p.planTo + ' 歲時約還剩 ' + fmt(r.endBalanceReal) + '（今日幣值）。';
   } else {
     v.className = 'verdict bad';
-    const need = solveMonthly(p);
     document.getElementById('vHead').textContent = '⚠️ 約 ' + r.depleteAge.toFixed(0) + ' 歲時資產耗盡';
-    document.getElementById('vDetail').textContent =
-      '距離規劃的 ' + p.planTo + ' 歲還差 ' + Math.max(0, p.planTo - r.depleteAge).toFixed(0) + ' 年。' +
-      '若要撐到 ' + p.planTo + ' 歲，每月投入需約 ' + fmt(need) + '（目前 ' + fmt(p.monthly) + '），或調整退休年齡/支出。';
+    if (p.mode === 'rate') {
+      const okRate = solveRate(p);
+      document.getElementById('vDetail').textContent =
+        '目前提領率 ' + p.wRate + '% 撐不到 ' + p.planTo + ' 歲。以現有參數，可持續的提領率約 ' +
+        okRate.toFixed(2) + '%，或調整退休後報酬率/退休年齡。';
+    } else {
+      const need = solveMonthly(p);
+      document.getElementById('vDetail').textContent =
+        '距離規劃的 ' + p.planTo + ' 歲還差 ' + Math.max(0, p.planTo - r.depleteAge).toFixed(0) + ' 年。' +
+        '若要撐到 ' + p.planTo + ' 歲，每月投入需約 ' + fmt(need) + '（目前 ' + fmt(p.monthly) + '），或調整退休年齡/支出。';
+    }
   }
 
   renderChart(p, r);
   state.plan = p;
   save();
 }
+
+/* 提領模式切換 */
+function applyModeVisibility() {
+  const mode = document.getElementById('pWMode').value;
+  document.getElementById('fldExpense').style.display = mode === 'rate' ? 'none' : '';
+  document.getElementById('fldWRate').style.display = mode === 'rate' ? '' : 'none';
+  document.getElementById('wModeNote').style.display = mode === 'rate' ? '' : 'none';
+}
+document.getElementById('pWMode').addEventListener('change', () => { applyModeVisibility(); renderPlan(); });
+document.getElementById('pExpUnit').addEventListener('change', renderPlan);
 
 /* ================= 曲線圖（SVG，今日幣值） ================= */
 function renderChart(p, r) {
@@ -537,11 +669,25 @@ function renderChart(p, r) {
 }
 
 PLAN_FIELDS.forEach(id => document.getElementById(id).addEventListener('input', renderPlan));
-document.querySelectorAll('[data-inf]').forEach(btn => {
-  btn.addEventListener('click', () => {
-    document.getElementById('pInflation').value = cpiAvg(Number(btn.dataset.inf)).toFixed(2);
-    renderPlan();
-  });
+
+/* 自選 CPI 平均年數 */
+function cpiYearsClamped() {
+  return Math.min(CPI_MAX_YEARS, Math.max(1, Math.round(num('pCpiYears') || 10)));
+}
+function updateCpiPreview() {
+  document.getElementById('cpiPreview').textContent = cpiAvg(cpiYearsClamped()).toFixed(2) + '%';
+}
+document.getElementById('pCpiYears').addEventListener('input', () => {
+  updateCpiPreview();
+  state.plan.cpiYears = cpiYearsClamped();
+  save();
+});
+document.getElementById('btnApplyCpi').addEventListener('click', () => {
+  const y = cpiYearsClamped();
+  document.getElementById('pCpiYears').value = y;
+  document.getElementById('pInflation').value = cpiAvg(y).toFixed(2);
+  renderPlan();
+  toast('已套用近 ' + y + ' 年平均通膨 ' + cpiAvg(y).toFixed(2) + '%');
 });
 document.getElementById('btnUseSnap').addEventListener('click', () => {
   if (!state.snaps.length) { toast('還沒有資產快照，先到「資產」分頁記錄'); return; }
@@ -695,10 +841,15 @@ document.querySelectorAll('nav.tabbar button').forEach(btn => {
 });
 
 function restoreInputs() {
-  const map = { age: 'pAge', retire: 'pRetire', now: 'pNow', monthly: 'pMonthly', rPre: 'pReturn', rPost: 'pReturnPost', expense: 'pExpense', pension: 'pPension', infl: 'pInflation', planTo: 'pPlanTo' };
+  const map = { age: 'pAge', retire: 'pRetire', now: 'pNow', monthly: 'pMonthly', rPre: 'pReturn', rPost: 'pReturnPost', expenseInput: 'pExpense', wRate: 'pWRate', pension: 'pPension', infl: 'pInflation', planTo: 'pPlanTo' };
   Object.keys(map).forEach(k => {
     if (state.plan[k] != null) document.getElementById(map[k]).value = state.plan[k];
   });
+  if (state.plan.expUnit) document.getElementById('pExpUnit').value = state.plan.expUnit;
+  if (state.plan.mode) document.getElementById('pWMode').value = state.plan.mode;
+  if (state.plan.cpiYears != null) document.getElementById('pCpiYears').value = state.plan.cpiYears;
+  applyModeVisibility();
+  updateCpiPreview();
   ASSET_FIELDS.forEach(id => {
     if (state.assets[id] != null) document.getElementById(id).value = state.assets[id];
   });
