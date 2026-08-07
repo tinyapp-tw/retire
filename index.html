@@ -288,6 +288,35 @@
         </div>
         <p class="note">通膨基準來自主計總處歷年 CPI 年增率（2001–2025，完整表見「設定」分頁）。年數愈短愈反映近期物價，愈長愈平滑。</p>
       </div>
+
+      <div class="card">
+        <h2>勞保勞退估算器（依官方公式粗估）</h2>
+        <div class="grid2">
+          <div class="field"><label for="liSalary">勞保：平均月投保薪資（最高 60 月均，上限 45,800）</label><input id="liSalary" type="number" inputmode="numeric" min="0" step="100" value="45800"></div>
+          <div class="field"><label for="liYears">勞保：預計投保年資（年）</label><input id="liYears" type="number" inputmode="numeric" min="0" max="60" value="35"></div>
+          <div class="field"><label for="lpBalance">勞退：目前專戶餘額</label><input id="lpBalance" type="number" inputmode="numeric" min="0" step="10000" value="0"></div>
+          <div class="field"><label for="lpWage">勞退：月提繳工資</label><input id="lpWage" type="number" inputmode="numeric" min="0" step="1000" value="50000"></div>
+          <div class="field"><label for="lpSelf">勞退：自提 %（0–6）</label><input id="lpSelf" type="number" inputmode="decimal" min="0" max="6" step="1" value="0"></div>
+          <div class="field"><label for="lpReturn">勞退：專戶年報酬假設 %</label><input id="lpReturn" type="number" inputmode="decimal" step="0.1" value="3"></div>
+          <div class="field"><label for="lpYears">勞退：月退領取年數</label><input id="lpYears" type="number" inputmode="numeric" min="5" max="40" value="24"></div>
+        </div>
+        <div class="kpi-row" style="margin-bottom:10px">
+          <div class="kpi">
+            <div class="label">預估勞保年金 /月</div>
+            <div class="value" id="kLI">—</div>
+            <div class="hint" id="kLIHint"></div>
+          </div>
+          <div class="kpi">
+            <div class="label">預估勞退月領 /月</div>
+            <div class="value" id="kLP">—</div>
+            <div class="hint" id="kLPHint"></div>
+          </div>
+        </div>
+        <div class="form-actions">
+          <button class="btn ghost" id="btnApplyPension">合計 <b id="kPensionTotal">—</b>，帶入「每月其他收入」</button>
+        </div>
+        <p class="note">勞保採兩式取優（式一 0.775%×年資×薪資+3000、式二 1.55%×年資×薪資），未計減額/展延。勞退以「距退休年數」（基本參數的年齡差）投影專戶到退休，再以年金攤還估月領。<b>皆為粗估，實際給付以勞保局核定為準。</b>專戶餘額查詢：勞保局 e 化服務系統（健保卡＋戶號或自然人憑證）、勞動保障卡，建議每年更新一次。</p>
+      </div>
     </section>
 
     <!-- ============ 資產 ============ -->
@@ -307,6 +336,7 @@
           <button class="btn" id="btnSnap">📸 記錄今天的資產快照</button>
         </div>
         <p class="note">建議每季記錄一次。同一天重複記錄會覆蓋當天的快照。</p>
+        <p class="note">💡 房產估值建議：用內政部「實價登錄」（lvr.land.moi.gov.tw）查同社區近期成交價換算，每年更新一次即可；為保守起見可打 9 折再扣房貸餘額。若自住房不打算變現，主流做法是<b>不列入</b>（填 0），退休金只靠可提領的金融資產。</p>
       </div>
 
       <div class="card">
@@ -345,7 +375,7 @@
         </ol>
       </div>
 
-      <p class="note" style="text-align:center">退休試算 版本 v1.02<br>本 App 僅提供數學試算與記錄，不構成任何投資建議。</p>
+      <p class="note" style="text-align:center">退休試算 版本 v1.03<br>本 App 僅提供數學試算與記錄，不構成任何投資建議。</p>
     </section>
   </main>
 
@@ -384,7 +414,8 @@ function cpiAvg(years) {
 }
 
 /* ================= 狀態 ================= */
-const PLAN_FIELDS = ['pAge', 'pRetire', 'pNow', 'pMonthly', 'pReturn', 'pReturnPost', 'pExpense', 'pWRate', 'pPension', 'pInflation', 'pPlanTo'];
+const PLAN_FIELDS = ['pAge', 'pRetire', 'pNow', 'pMonthly', 'pReturn', 'pReturnPost', 'pExpense', 'pWRate', 'pPension', 'pInflation', 'pPlanTo',
+  'liSalary', 'liYears', 'lpBalance', 'lpWage', 'lpSelf', 'lpReturn', 'lpYears'];
 const ASSET_FIELDS = ['aCash', 'aStock', 'aBond', 'aHouse', 'aIns', 'aOther'];
 
 let state = load();
@@ -537,8 +568,40 @@ function readPlan() {
     mode: document.getElementById('pWMode').value,
     wRate: num('pWRate') || 4,
     infl: num('pInflation'), planTo: num('pPlanTo'),
-    cpiYears: num('pCpiYears') || 10
+    cpiYears: num('pCpiYears') || 10,
+    liSalary: num('liSalary'), liYears: num('liYears'),
+    lpBalance: num('lpBalance'), lpWage: num('lpWage'), lpSelf: num('lpSelf'),
+    lpReturn: num('lpReturn'), lpYears: num('lpYears')
   };
+}
+
+/* ================= 勞保勞退估算（官方公式粗估） ================= */
+function estimatePension(p) {
+  /* 勞保老年年金：兩式取優 */
+  const f1 = p.liSalary * p.liYears * 0.00775 + 3000;
+  const f2 = p.liSalary * p.liYears * 0.0155;
+  const li = Math.max(0, Math.round(Math.max(f1, f2)));
+
+  /* 勞退新制：專戶投影到退休 → 年金攤還 */
+  const n = Math.max(0, Math.round((p.retire - p.age) * 12));
+  const i = Math.pow(1 + p.lpReturn / 100, 1 / 12) - 1;
+  const c = p.lpWage * (0.06 + Math.min(6, Math.max(0, p.lpSelf)) / 100);
+  let fv;
+  if (i > 0) fv = p.lpBalance * Math.pow(1 + i, n) + c * ((Math.pow(1 + i, n) - 1) / i);
+  else fv = p.lpBalance + c * n;
+  const N = Math.max(1, Math.round(p.lpYears * 12));
+  const lp = Math.max(0, Math.round(i > 0 ? fv * i / (1 - Math.pow(1 + i, -N)) : fv / N));
+
+  return { li, formula: f2 >= f1 ? '式二 1.55%' : '式一 0.775%+3000', lp, fv };
+}
+
+function renderPension(p) {
+  const e = estimatePension(p);
+  document.getElementById('kLI').textContent = e.li.toLocaleString('zh-TW');
+  document.getElementById('kLIHint').textContent = '採' + e.formula + '（較優）';
+  document.getElementById('kLP').textContent = e.lp.toLocaleString('zh-TW');
+  document.getElementById('kLPHint').textContent = '退休時專戶約 ' + fmt(e.fv) + '，分 ' + p.lpYears + ' 年領';
+  document.getElementById('kPensionTotal').textContent = (e.li + e.lp).toLocaleString('zh-TW') + ' /月';
 }
 
 /* 求解：要撐到規劃歲數，退休當下需要多少資產（固定支出模式，二分＋倍增搜尋） */
@@ -618,10 +681,18 @@ function renderPlan() {
     }
   }
 
+  renderPension(p);
   renderChart(p, r);
   state.plan = p;
   save();
 }
+
+document.getElementById('btnApplyPension').addEventListener('click', () => {
+  const e = estimatePension(readPlan());
+  document.getElementById('pPension').value = e.li + e.lp;
+  renderPlan();
+  toast('已帶入每月其他收入 ' + (e.li + e.lp).toLocaleString('zh-TW') + ' 元');
+});
 
 /* 提領模式切換 */
 function applyModeVisibility() {
@@ -841,7 +912,8 @@ document.querySelectorAll('nav.tabbar button').forEach(btn => {
 });
 
 function restoreInputs() {
-  const map = { age: 'pAge', retire: 'pRetire', now: 'pNow', monthly: 'pMonthly', rPre: 'pReturn', rPost: 'pReturnPost', expenseInput: 'pExpense', wRate: 'pWRate', pension: 'pPension', infl: 'pInflation', planTo: 'pPlanTo' };
+  const map = { age: 'pAge', retire: 'pRetire', now: 'pNow', monthly: 'pMonthly', rPre: 'pReturn', rPost: 'pReturnPost', expenseInput: 'pExpense', wRate: 'pWRate', pension: 'pPension', infl: 'pInflation', planTo: 'pPlanTo',
+    liSalary: 'liSalary', liYears: 'liYears', lpBalance: 'lpBalance', lpWage: 'lpWage', lpSelf: 'lpSelf', lpReturn: 'lpReturn', lpYears: 'lpYears' };
   Object.keys(map).forEach(k => {
     if (state.plan[k] != null) document.getElementById(map[k]).value = state.plan[k];
   });
