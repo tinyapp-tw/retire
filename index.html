@@ -266,6 +266,7 @@
           <div class="field"><label for="pReturnPost">股票年報酬率 %（退休後）</label><input id="pReturnPost" type="number" inputmode="decimal" step="0.1" value="3"></div>
           <div class="field"><label for="pCash">目前現金存款</label><input id="pCash" type="number" inputmode="numeric" min="0" step="10000" value="0"></div>
           <div class="field"><label for="pCashRate">存款年利率 %（適用現金）</label><input id="pCashRate" type="number" inputmode="decimal" step="0.05" value="1.5"></div>
+          <div class="field"><label for="pLump">退休時一次性入帳（勞退一次領等，併入股票）</label><input id="pLump" type="number" inputmode="numeric" min="0" step="10000" value="0"></div>
         </div>
         <button class="btn ghost small" id="btnUseSnap" style="margin-top:4px">帶入最新快照（股票、現金分欄；其他類別不帶入）</button>
         <p class="note" style="margin-top:8px">股票與現金分開複利：股票用上方報酬率，現金用存款利率。退休提領時<b>先花現金、再動股票</b>。</p>
@@ -319,7 +320,14 @@
           <div class="field"><label for="lpWage">勞退：月提繳工資</label><input id="lpWage" type="number" inputmode="numeric" min="0" step="1000" value="50000"></div>
           <div class="field"><label for="lpSelf">勞退：自提 %（0–6）</label><input id="lpSelf" type="number" inputmode="decimal" min="0" max="6" step="1" value="0"></div>
           <div class="field"><label for="lpReturn">勞退：專戶年報酬假設 %</label><input id="lpReturn" type="number" inputmode="decimal" step="0.1" value="3"></div>
-          <div class="field"><label for="lpYears">勞退：月退領取年數</label><input id="lpYears" type="number" inputmode="numeric" min="5" max="40" value="24"></div>
+          <div class="field">
+            <label for="lpMode">勞退：提領方式</label>
+            <select id="lpMode">
+              <option value="monthly">月領（固定金額）</option>
+              <option value="lump">一次領（併入投資）</option>
+            </select>
+          </div>
+          <div class="field" id="fldLpYears"><label for="lpYears">勞退：月退領取年數</label><input id="lpYears" type="number" inputmode="numeric" min="5" max="40" value="24"></div>
         </div>
         <div class="kpi-row" style="margin-bottom:10px">
           <div class="kpi">
@@ -328,7 +336,7 @@
             <div class="hint" id="kLIHint"></div>
           </div>
           <div class="kpi">
-            <div class="label">預估勞退月領 /月</div>
+            <div class="label" id="kLPLabel">預估勞退月領 /月</div>
             <div class="value" id="kLP">—</div>
             <div class="hint" id="kLPHint"></div>
           </div>
@@ -414,7 +422,7 @@
         </ol>
       </div>
 
-      <p class="note" style="text-align:center">退休試算 版本 v1.10<br>本 App 僅提供數學試算與記錄，不構成任何投資建議。</p>
+      <p class="note" style="text-align:center">退休試算 版本 v1.11<br>本 App 僅提供數學試算與記錄，不構成任何投資建議。</p>
     </section>
   </main>
 
@@ -453,7 +461,7 @@ function cpiAvg(years) {
 }
 
 /* ================= 狀態 ================= */
-const PLAN_FIELDS = ['pAge', 'pRetire', 'pNow', 'pMonthly', 'pReturn', 'pReturnPost', 'pCash', 'pCashRate', 'pExpense', 'pWRate', 'pPensionIdx', 'pPensionFix', 'pInflation', 'pPlanTo',
+const PLAN_FIELDS = ['pAge', 'pRetire', 'pNow', 'pMonthly', 'pReturn', 'pReturnPost', 'pCash', 'pCashRate', 'pLump', 'pExpense', 'pWRate', 'pPensionIdx', 'pPensionFix', 'pInflation', 'pPlanTo',
   'liSalary', 'liYears', 'lpBalance', 'lpWage', 'lpSelf', 'lpReturn', 'lpYears'];
 const ASSET_FIELDS = ['aCash', 'aStock', 'aBond', 'aHouse', 'aIns', 'aOther'];
 
@@ -533,6 +541,7 @@ function simulate(p) {
       A = A * (1 + rPre) + p.monthly;   /* 每月投入進股票 */
       C = C * (1 + rCash);
       if (m === retireM) {
+        A += (p.lump || 0);   /* 退休時一次性入帳（勞退一次領等）併入股票桶 */
         atRetireNom = A + C;
         if (mode === 'rate') baseW = (A + C) * (p.wRate / 100) / 12;
       }
@@ -611,6 +620,7 @@ function readPlan() {
     age: num('pAge'), retire: num('pRetire'), now: num('pNow'), monthly: num('pMonthly'),
     rPre: num('pReturn'), rPost: num('pReturnPost'),
     cash: num('pCash'), cashRate: num('pCashRate'),
+    lump: num('pLump'), lpMode: document.getElementById('lpMode').value,
     expenseInput, expUnit,
     expense: expUnit === 'year' ? expenseInput / 12 : expenseInput,
     pensionIdx: num('pPensionIdx'), pensionFix: num('pPensionFix'),
@@ -629,7 +639,8 @@ function estimatePension(p) {
   /* 勞保老年年金：兩式取優 */
   const f1 = p.liSalary * p.liYears * 0.00775 + 3000;
   const f2 = p.liSalary * p.liYears * 0.0155;
-  const li = Math.max(0, Math.round(Math.max(f1, f2)));
+  /* 無年資或無投保薪資時不產生年金（式一的 +3000 不應憑空出現） */
+  const li = (p.liSalary > 0 && p.liYears > 0) ? Math.max(0, Math.round(Math.max(f1, f2))) : 0;
 
   /* 勞退新制：專戶投影到退休 → 年金攤還 */
   const n = Math.max(0, Math.round((p.retire - p.age) * 12));
@@ -646,11 +657,22 @@ function estimatePension(p) {
 
 function renderPension(p) {
   const e = estimatePension(p);
+  const lump = p.lpMode === 'lump';
   document.getElementById('kLI').textContent = e.li.toLocaleString('zh-TW');
   document.getElementById('kLIHint').textContent = '採' + e.formula + '（較優）';
-  document.getElementById('kLP').textContent = e.lp.toLocaleString('zh-TW');
-  document.getElementById('kLPHint').textContent = '退休時專戶約 ' + fmt(e.fv) + '，分 ' + p.lpYears + ' 年領';
-  document.getElementById('kPensionTotal').textContent = (e.li + e.lp).toLocaleString('zh-TW') + ' /月';
+  document.getElementById('fldLpYears').style.display = lump ? 'none' : '';
+  if (lump) {
+    document.getElementById('kLPLabel').textContent = '勞退一次領總額（屆時）';
+    document.getElementById('kLP').textContent = fmt(e.fv);
+    document.getElementById('kLPHint').textContent = '退休時領出，併入股票一起投資與提領';
+    document.getElementById('kPensionTotal').textContent =
+      '勞保 ' + e.li.toLocaleString('zh-TW') + ' /月＋一次領 ' + fmt(e.fv);
+  } else {
+    document.getElementById('kLPLabel').textContent = '預估勞退月領 /月';
+    document.getElementById('kLP').textContent = e.lp.toLocaleString('zh-TW');
+    document.getElementById('kLPHint').textContent = '退休時專戶約 ' + fmt(e.fv) + '，分 ' + p.lpYears + ' 年領';
+    document.getElementById('kPensionTotal').textContent = (e.li + e.lp).toLocaleString('zh-TW') + ' /月';
+  }
 }
 
 /* 求解：要撐到規劃歲數，退休當下需要多少資產（固定支出模式，二分＋倍增搜尋） */
@@ -766,12 +788,22 @@ function renderPlan() {
 }
 
 document.getElementById('btnApplyPension').addEventListener('click', () => {
-  const e = estimatePension(readPlan());
+  const p = readPlan();
+  const e = estimatePension(p);
   document.getElementById('pPensionIdx').value = e.li;   /* 勞保年金：法定通膨連動 */
-  document.getElementById('pPensionFix').value = e.lp;   /* 勞退月領：固定金額 */
-  renderPlan();
-  toast('已帶入：勞保 ' + e.li.toLocaleString('zh-TW') + '（通膨連動）、勞退 ' + e.lp.toLocaleString('zh-TW') + '（固定）');
+  if (p.lpMode === 'lump') {
+    document.getElementById('pPensionFix').value = 0;
+    document.getElementById('pLump').value = Math.round(e.fv);   /* 一次領：退休時併入股票 */
+    renderPlan();
+    toast('已帶入：勞保 ' + e.li.toLocaleString('zh-TW') + ' /月、勞退一次領 ' + fmt(e.fv) + ' 併入投資');
+  } else {
+    document.getElementById('pPensionFix').value = e.lp;   /* 勞退月領：固定金額 */
+    document.getElementById('pLump').value = 0;
+    renderPlan();
+    toast('已帶入：勞保 ' + e.li.toLocaleString('zh-TW') + '（通膨連動）、勞退 ' + e.lp.toLocaleString('zh-TW') + '（固定）');
+  }
 });
+document.getElementById('lpMode').addEventListener('change', renderPlan);
 
 /* 提領模式切換 */
 function applyModeVisibility() {
@@ -1112,13 +1144,14 @@ document.querySelectorAll('nav.tabbar button').forEach(btn => {
 function restoreInputs() {
   /* 舊版單一 pension 欄位的資料，遷移到通膨連動欄 */
   if (state.plan.pension != null && state.plan.pensionIdx == null) state.plan.pensionIdx = state.plan.pension;
-  const map = { age: 'pAge', retire: 'pRetire', now: 'pNow', monthly: 'pMonthly', rPre: 'pReturn', rPost: 'pReturnPost', cash: 'pCash', cashRate: 'pCashRate', expenseInput: 'pExpense', wRate: 'pWRate', pensionIdx: 'pPensionIdx', pensionFix: 'pPensionFix', infl: 'pInflation', planTo: 'pPlanTo',
+  const map = { age: 'pAge', retire: 'pRetire', now: 'pNow', monthly: 'pMonthly', rPre: 'pReturn', rPost: 'pReturnPost', cash: 'pCash', cashRate: 'pCashRate', expenseInput: 'pExpense', wRate: 'pWRate', pensionIdx: 'pPensionIdx', pensionFix: 'pPensionFix', lump: 'pLump', infl: 'pInflation', planTo: 'pPlanTo',
     liSalary: 'liSalary', liYears: 'liYears', lpBalance: 'lpBalance', lpWage: 'lpWage', lpSelf: 'lpSelf', lpReturn: 'lpReturn', lpYears: 'lpYears' };
   Object.keys(map).forEach(k => {
     if (state.plan[k] != null) document.getElementById(map[k]).value = state.plan[k];
   });
   if (state.plan.expUnit) document.getElementById('pExpUnit').value = state.plan.expUnit;
   if (state.plan.mode) document.getElementById('pWMode').value = state.plan.mode;
+  if (state.plan.lpMode) document.getElementById('lpMode').value = state.plan.lpMode;
   if (state.plan.cpiYears != null) document.getElementById('pCpiYears').value = state.plan.cpiYears;
   if (state.fixed) {
     if (state.fixed.other != null) document.getElementById('fOtherFixed').value = state.fixed.other;
